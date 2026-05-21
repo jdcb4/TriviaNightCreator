@@ -1,0 +1,29 @@
+{
+  "name": "@trivia/db",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'No lint for @trivia/db'",
+    "db:generate": "drizzle-kit generate:pg",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/seed.ts",
+    "test": "echo 'No tests for @trivia/db'"
+  },
+  "dependencies": {
+    "@trivia/shared": "workspace:^",
+    "drizzle-orm": "^0.29.3",
+    "pg": "^8.11.3",
+    "dotenv": "^16.4.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.20.13",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.1"
+  }
+}

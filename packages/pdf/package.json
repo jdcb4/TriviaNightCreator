@@ -1,0 +1,23 @@
+{
+  "name": "@trivia/pdf",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'No lint for @trivia/pdf'",
+    "test": "echo 'No tests for @trivia/pdf'"
+  },
+  "dependencies": {
+    "@trivia/shared": "workspace:^",
+    "@trivia/domain": "workspace:^",
+    "@trivia/db": "workspace:^",
+    "playwright": "^1.42.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.20"
+  }
+}

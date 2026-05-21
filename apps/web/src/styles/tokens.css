@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Surface Tokens (HSL Color Channels) */
+  --surface-base: 224 25% 7%;         /* Dark elegant navy-charcoal background */
+  --surface-raised: 224 20% 11%;      /* Slightly elevated panel/card */
+  --surface-overlay: 224 20% 16%;     /* Popovers, menus, modals */
+  --surface-sunken: 224 25% 5%;       /* Recessed inputs and wells */
+  --surface-presentation: 224 30% 6%; /* Deep backdrop for presentations */
+  --surface-print: 0 0% 100%;         /* Paper white */
+
+  /* Text Tokens */
+  --text-primary: 210 40% 98%;        /* High-contrast crisp near-white */
+  --text-secondary: 217 15% 75%;      /* Soft blue-gray details */
+  --text-subtle: 217 10% 50%;         /* Muted caption text/placeholders */
+  --text-on-accent: 0 0% 100%;        /* Text on top of full-strength colors */
+  --text-presentation: 210 40% 98%;   /* Screen-readable projection white */
+  --text-print: 0 0% 0%;              /* Ink black */
+
+  /* Accent Tokens */
+  --accent-primary: 263 85% 64%;      /* Royal Neon Purple */
+  --accent-primary-hover: 263 85% 54%;
+  --accent-success: 142 72% 45%;      /* Vibrant Forest Green */
+  --accent-warning: 38 92% 50%;       /* High-visibility Amber */
+  --accent-danger: 350 82% 56%;       /* Clear Crimson Alert */
+  --accent-info: 199 89% 48%;         /* Bright Informational Cyan */
+
+  /* Border Tokens */
+  --border-default: 224 15% 16%;      /* Default subtle element separator */
+  --border-subtle: 224 15% 12%;       /* Very soft line for internal spacing */
+  --border-strong: 224 15% 24%;       /* Strong active input boundaries */
+  --border-print: 0 0% 0%;            /* Solid black drawing lines */
+
+  /* Typography Font Sizes */
+  --font-size-display: 3.5rem;
+  --font-size-h1: 2.25rem;
+  --font-size-h2: 1.75rem;
+  --font-size-h3: 1.25rem;
+  --font-size-h4: 1.125rem;
+  --font-size-body: 1rem;
+  --font-size-caption: 0.875rem;
+}
+
+/* Custom global overrides to ensure clean scrollbars and smooth interactive behaviors */
+* {
+  border-color: hsl(var(--border-default) / 0.1);
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-default)) transparent;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: hsl(var(--surface-base));
+  color: hsl(var(--text-primary));
+  min-height: 100vh;
+}
+
+/* Premium smooth glassmorphism utility classes */
+.glass-panel {
+  background: rgba(18, 22, 33, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(25, 30, 45, 0.85);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}

@@ -1,0 +1,13 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1779359222215,
+      "tag": "0000_illegal_gravity",
+      "breakpoints": true
+    }
+  ]
+}
