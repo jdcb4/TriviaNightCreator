@@ -3,6 +3,7 @@ import { CreatePage } from "./features/creator/CreatePage";
 import { LinksPage } from "./features/creator/LinksPage";
 import { BuilderPage } from "./features/builder/BuilderPage";
 import { PresentationPage } from "./features/presenter/PresentationPage";
+import { ToastProvider } from "./components/ui/Toast";
 import "./styles/tokens.css";
 
 type PageState =
@@ -55,49 +56,57 @@ export default function App() {
   };
 
   // Render correct page view
-  switch (page.name) {
-    case "create":
-      return <CreatePage onCreated={navigateToLinks} />;
-    
-    case "links":
-      return (
-        <LinksPage
-          triviaNightId={page.triviaNightId}
-          editToken={page.editToken}
-          presentToken={page.presentToken}
-          onGoToBuilder={() => navigateToBuilder(page.triviaNightId, page.editToken)}
-        />
-      );
-    
-    case "builder":
-      return (
-        <BuilderPage
-          triviaNightId={page.triviaNightId}
-          editToken={page.editToken}
-          onExit={navigateToCreate}
-          onLaunchPresenter={(presentToken) =>
-            navigateToPresent(page.triviaNightId, presentToken, page.editToken)
-          }
-        />
-      );
-    
-    case "present":
-      return (
-        <PresentationPage
-          triviaNightId={page.triviaNightId}
-          presentToken={page.presentToken}
-          editToken={page.editToken}
-          onExit={() => {
-            if (page.editToken) {
-              navigateToBuilder(page.triviaNightId, page.editToken);
-            } else {
-              navigateToCreate();
+  const renderContent = () => {
+    switch (page.name) {
+      case "create":
+        return <CreatePage onCreated={navigateToLinks} />;
+      
+      case "links":
+        return (
+          <LinksPage
+            triviaNightId={page.triviaNightId}
+            editToken={page.editToken}
+            presentToken={page.presentToken}
+            onGoToBuilder={() => navigateToBuilder(page.triviaNightId, page.editToken)}
+          />
+        );
+      
+      case "builder":
+        return (
+          <BuilderPage
+            triviaNightId={page.triviaNightId}
+            editToken={page.editToken}
+            onExit={navigateToCreate}
+            onLaunchPresenter={(presentToken) =>
+              navigateToPresent(page.triviaNightId, presentToken, page.editToken)
             }
-          }}
-        />
-      );
-    
-    default:
-      return <CreatePage onCreated={navigateToLinks} />;
-  }
+          />
+        );
+      
+      case "present":
+        return (
+          <PresentationPage
+            triviaNightId={page.triviaNightId}
+            presentToken={page.presentToken}
+            editToken={page.editToken}
+            onExit={() => {
+              if (page.editToken) {
+                navigateToBuilder(page.triviaNightId, page.editToken);
+              } else {
+                navigateToCreate();
+              }
+            }}
+          />
+        );
+      
+      default:
+        return <CreatePage onCreated={navigateToLinks} />;
+    }
+  };
+
+  return (
+    <ToastProvider>
+      {renderContent()}
+    </ToastProvider>
+  );
 }

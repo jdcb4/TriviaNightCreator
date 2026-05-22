@@ -1,6 +1,6 @@
 {
   "name": "trivia-night-creator-root",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "description": "No-account trivia night builder and host tool for in-person events",
   "scripts": {

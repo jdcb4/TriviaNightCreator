@@ -2,6 +2,21 @@
 
 Notable changes by version. Newest at the top. Bumps follow `docs/VERSIONING.md`.
 
+## 1.0.2 - 2026-05-22
+
+- Fixed the "0 questions" presentation slide bug by unifying flat data.questions client-side when presenting via host/edit tokens, restoring all slide deck question steps.
+- Introduced customizable presentation slide settings to include/exclude round question recap and answer recap slides from the slideshow.
+- Created premium glassmorphic, interactive, full-screen on-demand recap modals for both questions and revealed answers, accessible anytime during a round.
+
+## 1.0.1 - 2026-05-22
+
+- Added premium glassmorphic Toast notification provider system across the web builder page replacing browser alerts.
+- Redesigned standard and landscape answer sheets with dedicated graphic slots for cartoon decorations.
+- Generated 10 high-quality B&W cartoon assets representing educational, game, and trivia themes.
+- Optimized marking guide PDFs to fit up to 20 questions compactly onto a single information-dense A4 page.
+- Fixed stale React closures in presentation slide polling, preventing slides from snapping back to Slide 1 every 5 seconds.
+- Implemented round-limited overall leaderboard computations to prevent future saved scores from leaking onto slides between earlier rounds.
+
 ## 0.1.0 - 2026-05-21
 
 - Initialized TriviaNightCreator documentation set.

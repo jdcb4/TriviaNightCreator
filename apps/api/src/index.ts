@@ -28,6 +28,8 @@ import {
   renderAnswerSheetHtml,
   renderMarkingGuideHtml,
   generatePdfFromHtml,
+  renderCombinedAnswerSheetsHtml,
+  renderCombinedMarkingGuidesHtml,
 } from "@trivia/pdf";
 import { generateToken, hashToken } from "./utils/crypto";
 import { requireEditToken, requirePresentOrEditToken } from "./middleware/auth";
@@ -645,7 +647,7 @@ app.get("/api/trivia-nights/:id/leaderboards", requirePresentOrEditToken, async 
     const allBonuses = await db.select().from(bonusScores).where(eq(bonusScores.triviaNightId, triviaNightId));
 
     const leaderboard = calculateLeaderboards(allTeams as any, allRounds as any, allScores as any, allBonuses as any);
-    return c.json({ leaderboard });
+    return c.json({ leaderboard, scores: allScores, bonusScores: allBonuses });
   } catch (error) {
     console.error("Leaderboard calculation error:", error);
     return c.json({ error: "Internal Server Error" }, 500);
@@ -822,6 +824,137 @@ app.get("/api/print/rounds/:roundId/marking-guide", async (c) => {
     });
   } catch (error) {
     console.error("PDF generation error:", error);
+    return c.json({ error: "PDF Generation Failed: " + (error as Error).message }, 500);
+  }
+});
+
+app.get("/api/print/trivia-nights/:id/answer-sheets", async (c) => {
+  const triviaNightId = c.req.param("id");
+  try {
+    const [trivia] = await db.select().from(triviaNights).where(eq(triviaNights.id, triviaNightId)).limit(1);
+    if (!trivia) return c.json({ error: "Trivia Night not found" }, 404);
+
+    const allRounds = await db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.triviaNightId, triviaNightId))
+      .orderBy(rounds.orderIndex);
+
+    const activeRounds = allRounds.filter((r) => r.type === "question_round");
+    if (activeRounds.length === 0) return c.json({ error: "No printable rounds configured" }, 400);
+
+    const roundsData = [];
+    for (const round of activeRounds) {
+      const roundQ = await db.select().from(questions).where(eq(questions.roundId, round.id));
+      const maxScore = calculateRoundMaxScore(roundQ as any);
+
+      // Fetch or allocate decorations
+      let selections = await db
+        .select({
+          slotId: decorationSelections.slotId,
+          fileUrl: decorativeAssets.fileUrl,
+          sizeCategory: decorativeAssets.sizeCategory,
+        })
+        .from(decorationSelections)
+        .innerJoin(decorativeAssets, eq(decorationSelections.assetId, decorativeAssets.id))
+        .where(eq(decorationSelections.roundId, round.id));
+
+      if (selections.length === 0) {
+        const allAssets = await db.select().from(decorativeAssets);
+        if (allAssets.length > 0) {
+          const slots: ("header" | "side" | "footer")[] = ["header", "side", "footer"];
+          for (const slot of slots) {
+            const targetSize = slot === "header" ? "small" : slot === "side" ? "medium" : "large";
+            const matching = allAssets.filter((a) => a.sizeCategory === targetSize);
+            const poolArr = matching.length > 0 ? matching : allAssets;
+            const randomAsset = poolArr[Math.floor(Math.random() * poolArr.length)];
+
+            if (randomAsset) {
+              await db.insert(decorationSelections).values({
+                id: crypto.randomUUID(),
+                roundId: round.id,
+                slotId: slot,
+                assetId: randomAsset.id,
+                createdAt: new Date(),
+              });
+            }
+          }
+          // Fetch again
+          selections = await db
+            .select({
+              slotId: decorationSelections.slotId,
+              fileUrl: decorativeAssets.fileUrl,
+              sizeCategory: decorativeAssets.sizeCategory,
+            })
+            .from(decorationSelections)
+            .innerJoin(decorativeAssets, eq(decorationSelections.assetId, decorativeAssets.id))
+            .where(eq(decorationSelections.roundId, round.id));
+        }
+      }
+
+      roundsData.push({
+        round: round as any,
+        branding: trivia.branding as any,
+        maxScore,
+        decorations: selections as any,
+      });
+    }
+
+    const html = renderCombinedAnswerSheetsHtml(roundsData);
+    const isLandscape = activeRounds.length > 0 && activeRounds[0]?.answerSheetLayout === "landscape_20";
+    const pdfBuffer = await generatePdfFromHtml(html, isLandscape);
+
+    return new Response(new Uint8Array(pdfBuffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="answer-sheets-package-${trivia.title.replace(/\s+/g, "-").toLowerCase()}.pdf"`,
+      },
+    });
+  } catch (error) {
+    console.error("PDF package generation error:", error);
+    return c.json({ error: "PDF Generation Failed: " + (error as Error).message }, 500);
+  }
+});
+
+app.get("/api/print/trivia-nights/:id/marking-guides", async (c) => {
+  const triviaNightId = c.req.param("id");
+  try {
+    const [trivia] = await db.select().from(triviaNights).where(eq(triviaNights.id, triviaNightId)).limit(1);
+    if (!trivia) return c.json({ error: "Trivia Night not found" }, 404);
+
+    const allRounds = await db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.triviaNightId, triviaNightId))
+      .orderBy(rounds.orderIndex);
+
+    const activeRounds = allRounds.filter((r) => r.type === "question_round");
+    if (activeRounds.length === 0) return c.json({ error: "No printable rounds configured" }, 400);
+
+    const roundsData = [];
+    for (const round of activeRounds) {
+      const roundQ = await db.select().from(questions).where(eq(questions.roundId, round.id));
+      const maxScore = calculateRoundMaxScore(roundQ as any);
+
+      roundsData.push({
+        round: round as any,
+        branding: trivia.branding as any,
+        questions: roundQ as any,
+        maxScore,
+      });
+    }
+
+    const html = renderCombinedMarkingGuidesHtml(roundsData);
+    const pdfBuffer = await generatePdfFromHtml(html, false); // Marking guides package is portrait
+
+    return new Response(new Uint8Array(pdfBuffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="marking-guides-package-${trivia.title.replace(/\s+/g, "-").toLowerCase()}.pdf"`,
+      },
+    });
+  } catch (error) {
+    console.error("PDF package generation error:", error);
     return c.json({ error: "PDF Generation Failed: " + (error as Error).message }, 500);
   }
 });

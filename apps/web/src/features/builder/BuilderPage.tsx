@@ -10,6 +10,7 @@ import {
   Textarea,
   Subtle,
 } from "../../components/ui/primitives";
+import { useToast } from "../../components/ui/Toast";
 import {
   Layers,
   Users,
@@ -25,6 +26,7 @@ import {
   Check,
   X,
   PlusCircle,
+  ClipboardList,
 } from "lucide-react";
 import {
   calculateRoundMaxScore,
@@ -48,7 +50,7 @@ interface BuilderPageProps {
   onLaunchPresenter: (presentToken: string) => void;
 }
 
-type TabType = "rounds" | "teams" | "print" | "branding";
+type TabType = "rounds" | "branding" | "print" | "teams" | "scoring";
 
 export const BuilderPage: React.FC<BuilderPageProps> = ({
   triviaNightId,
@@ -56,7 +58,9 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
   onExit,
   onLaunchPresenter,
 }) => {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<TabType>("rounds");
+  const [activeScoringSubTab, setActiveScoringSubTab] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +177,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
       // Select first round by default
       if (data.rounds && data.rounds.length > 0) {
         setSelectedRoundId(data.rounds[0].id);
+        setActiveScoringSubTab("round_" + data.rounds[0].id);
       }
     } catch (err) {
       console.error(err);
@@ -356,7 +361,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
 
       setSelectedSlotNumber(null); // Close editor
     } catch (err) {
-      alert("Error saving question. Ensure all required fields are filled.");
+      toast.error("Error saving question. Ensure all required fields are filled.");
     } finally {
       setSaving(false);
     }
@@ -428,7 +433,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
       setWarningLayoutRoundId(null);
       setWarningLayoutMessage(null);
     } catch (err) {
-      alert("Error changing layout");
+      toast.error("Error changing layout");
     }
   };
 
@@ -478,9 +483,9 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
             }
           : null
       );
-      alert("Settings and Branding updated successfully!");
+      toast.success("Settings and Branding updated successfully!");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error saving");
+      toast.error(err instanceof Error ? err.message : "Error saving");
     } finally {
       setSaving(false);
     }
@@ -550,7 +555,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
       const data = await response.json();
       setTeamsList(data.teams);
     } catch (err) {
-      alert("Error configuring teams list");
+      toast.error("Error configuring teams list");
     } finally {
       setSaving(false);
     }
@@ -628,9 +633,9 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
 
       const data = await response.json();
       setScoresList(data.scores);
-      alert("Scores grid updated successfully!");
+      toast.success("Scores grid updated successfully!");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error saving scores matrix");
+      toast.error(err instanceof Error ? err.message : "Error saving scores matrix");
     } finally {
       setSaving(false);
     }
@@ -832,39 +837,65 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
       {/* 2. SIDEBAR AND CONTENT SPLIT */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Side Tab Navigation Panel */}
-        <aside className="w-64 border-r border-border-default/40 bg-surface-sunken flex flex-col p-4 gap-2">
-          <Button
-            variant={activeTab === "rounds" ? "primary" : "ghost"}
-            icon={<Layers size={18} />}
-            onClick={() => setActiveTab("rounds")}
-            className="justify-start py-3"
-          >
-            Rounds & Questions
-          </Button>
-          <Button
-            variant={activeTab === "teams" ? "primary" : "ghost"}
-            icon={<Users size={18} />}
-            onClick={() => setActiveTab("teams")}
-            className="justify-start py-3"
-          >
-            Teams & Scoring
-          </Button>
-          <Button
-            variant={activeTab === "print" ? "primary" : "ghost"}
-            icon={<Printer size={18} />}
-            onClick={() => setActiveTab("print")}
-            className="justify-start py-3"
-          >
-            Print Centre
-          </Button>
-          <Button
-            variant={activeTab === "branding" ? "primary" : "ghost"}
-            icon={<Settings size={18} />}
-            onClick={() => setActiveTab("branding")}
-            className="justify-start py-3"
-          >
-            Event & Branding
-          </Button>
+        <aside className="w-64 border-r border-border-default/40 bg-surface-sunken flex flex-col p-4 gap-4">
+          <Stack gap="small">
+            <div className="text-body-xs font-bold uppercase tracking-wider text-text-subtle/80 px-3 mb-1">
+              Preparation
+            </div>
+            <Button
+              variant={activeTab === "rounds" ? "primary" : "ghost"}
+              icon={<Layers size={18} />}
+              onClick={() => setActiveTab("rounds")}
+              className="justify-start py-3"
+            >
+              Rounds & Questions
+            </Button>
+            <Button
+              variant={activeTab === "branding" ? "primary" : "ghost"}
+              icon={<Settings size={18} />}
+              onClick={() => setActiveTab("branding")}
+              className="justify-start py-3"
+            >
+              Event & Branding
+            </Button>
+            <Button
+              variant={activeTab === "print" ? "primary" : "ghost"}
+              icon={<Printer size={18} />}
+              onClick={() => setActiveTab("print")}
+              className="justify-start py-3"
+            >
+              Print Centre
+            </Button>
+          </Stack>
+
+          <div className="border-t border-border-default/20 my-1"></div>
+
+          <Stack gap="small">
+            <div className="text-body-xs font-bold uppercase tracking-wider text-text-subtle/80 px-3 mb-1">
+              On The Night
+            </div>
+            <Button
+              variant={activeTab === "teams" ? "primary" : "ghost"}
+              icon={<Users size={18} />}
+              onClick={() => setActiveTab("teams")}
+              className="justify-start py-3"
+            >
+              Teams
+            </Button>
+            <Button
+              variant={activeTab === "scoring" ? "primary" : "ghost"}
+              icon={<ClipboardList size={18} />}
+              onClick={() => {
+                setActiveTab("scoring");
+                if (!activeScoringSubTab && roundsList.length > 0) {
+                  setActiveScoringSubTab("round_" + roundsList.sort((a, b) => a.orderIndex - b.orderIndex)[0]?.id);
+                }
+              }}
+              className="justify-start py-3"
+            >
+              Scoring
+            </Button>
+          </Stack>
 
           <div className="mt-auto p-4 border border-border-default/40 bg-surface-base rounded-xl">
             <Subtle className="block font-semibold mb-1 text-accent-primary">Host Edit Token:</Subtle>
@@ -1223,411 +1254,491 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
           )}
 
           {/* TAB 2: TEAMS & SCORING MATRIX */}
+          {/* TAB 2: TEAMS */}
           {activeTab === "teams" && (
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-              {/* Left Grid Panel: Team list configuration & Scoring (7 cols) */}
-              <div className="xl:col-span-8 flex flex-col gap-8">
-                {/* Team Manager Configuration Panel */}
-                <Surface variant="raised" className="p-6 bg-surface-raised/40">
-                  <Stack gap="default">
-                    <Heading level={3} className="text-accent-primary font-display font-semibold">
-                      Configure Event Teams
-                    </Heading>
-                    <Body className="text-body-sm">
-                      Manage the roster of teams competing. Adding/deleting teams immediately updates score grids.
-                    </Body>
-
-                    <form onSubmit={handleAddTeam} className="flex gap-2 mt-2">
-                      <Input
-                        placeholder="Enter team name..."
-                        value={teamFormName}
-                        onChange={(e) => setTeamFormName(e.target.value)}
-                        disabled={saving}
-                      />
-                      <Button
-                        type="submit"
-                        variant="secondary"
-                        icon={<Plus size={16} />}
-                        disabled={saving || !teamFormName.trim()}
-                        className="shrink-0"
-                      >
-                        Add Team
-                      </Button>
-                    </form>
-
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {teamsList
-                        .sort((a, b) => a.orderIndex - b.orderIndex)
-                        .map((team) => (
-                          <div
-                            key={team.id}
-                            className="pl-3 pr-1 py-1 bg-surface-overlay border border-border-default/60 hover:border-border-strong rounded-xl flex items-center gap-2 group transition-all"
-                          >
-                            <span className="text-body-sm font-semibold">{team.name}</span>
-                            <button
-                              onClick={() => handleDeleteTeam(team.id)}
-                              className="p-1 rounded-md text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors"
-                              title="Delete Team"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      {teamsList.length === 0 && (
-                        <div className="text-text-subtle text-body-sm text-center py-4 w-full border border-dashed border-border-default/40 rounded-xl">
-                          No teams added yet. Create at least one team above to enter scores.
-                        </div>
-                      )}
-                    </div>
-                  </Stack>
-                </Surface>
-
-                {/* Score entry matrix grid */}
-                <Surface variant="raised" className="p-6 bg-surface-raised/40">
-                  <Stack gap="default">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div>
-                        <Heading level={3} className="text-accent-primary font-display font-semibold">
-                          Score Entry Matrix
-                        </Heading>
-                        <Body className="text-body-sm">
-                          Enter team scores for the active round. Leaves fields blank for unmarked teams.
-                        </Body>
-                      </div>
-
-                      <div className="flex gap-2 items-center">
-                        <span className="text-body-sm font-semibold text-text-secondary shrink-0">Scoring Round:</span>
-                        <Select
-                          value={selectedRoundId}
-                          onChange={(e) => setSelectedRoundId(e.target.value)}
-                          className="py-1 px-3 w-40 rounded-lg text-body-sm"
-                        >
-                          {roundsList
-                            .sort((a, b) => a.orderIndex - b.orderIndex)
-                            .map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.title}
-                              </option>
-                            ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    {selectedRound && (
-                      <div className="mt-3">
-                        <div className="flex justify-between items-center mb-3 bg-surface-sunken p-3 rounded-xl border border-border-default/30">
-                          <span className="text-body-sm font-semibold text-text-secondary">
-                            Active Layout: <span className="text-text-primary capitalize">{selectedRound.answerSheetLayout || "N/A"}</span>
-                          </span>
-                          <span className="text-body-sm font-semibold text-accent-info">
-                            Calculated Max Score: {calculateRoundMaxScore(selectedRoundQuestions)} points
-                          </span>
-                        </div>
-
-                        {teamsList.length === 0 ? (
-                          <div className="text-center text-text-subtle py-8">
-                            Create teams above to display the scoring matrix.
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-3">
-                            {teamsList
-                              .sort((a, b) => a.orderIndex - b.orderIndex)
-                              .map((team) => {
-                                const errorText = scoreErrors[team.id];
-                                const isOverrideChecked = scoresOverrides[team.id] || false;
-                                return (
-                                  <div
-                                    key={team.id}
-                                    className="p-4 bg-surface-overlay border border-border-default/40 rounded-xl flex flex-col gap-3 transition-colors hover:bg-surface-overlay/80"
-                                  >
-                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                                      <span className="font-semibold text-body-sm text-text-primary shrink-0">
-                                        {team.name}
-                                      </span>
-
-                                      <div className="flex items-center gap-4 w-full md:w-auto">
-                                        <div className="w-24 shrink-0">
-                                          <input
-                                            type="number"
-                                            placeholder="Unmarked"
-                                            value={scoresInput[team.id] || ""}
-                                            onChange={(e) =>
-                                              handleScoreInputChange(team.id, e.target.value)
-                                            }
-                                            className="w-full text-center px-3 py-2 rounded-xl bg-surface-sunken border border-border-default text-text-primary text-body-sm focus:outline-none focus:border-accent-primary"
-                                          />
-                                        </div>
-
-                                        {errorText && (
-                                          <div className="flex items-center gap-2">
-                                            <label className="flex items-center gap-1.5 cursor-pointer text-body-sm text-accent-warning font-semibold select-none">
-                                              <input
-                                                type="checkbox"
-                                                checked={isOverrideChecked}
-                                                onChange={(e) =>
-                                                  setScoresOverrides((prev) => ({
-                                                    ...prev,
-                                                    [team.id]: e.target.checked,
-                                                  }))
-                                                }
-                                                className="w-4 h-4 accent-accent-warning cursor-pointer"
-                                              />
-                                              Bypass Limit
-                                            </label>
-                                            {isOverrideChecked && (
-                                              <input
-                                                type="text"
-                                                placeholder="Bypass reason..."
-                                                value={scoresOverrideReasons[team.id] || ""}
-                                                onChange={(e) =>
-                                                  setScoresOverrideReasons((prev) => ({
-                                                    ...prev,
-                                                    [team.id]: e.target.value,
-                                                  }))
-                                                }
-                                                className="px-2 py-1 bg-surface-sunken border border-border-default rounded text-body-xs w-36 outline-none"
-                                              />
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {errorText && (
-                                      <div className="text-body-sm text-accent-warning font-semibold flex items-center gap-1">
-                                        <span>⚠️</span>
-                                        <span>{errorText}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-
-                            <Button
-                              onClick={handleSaveScoresGrid}
-                              variant="primary"
-                              icon={<Save size={16} />}
-                              className="w-full mt-4"
-                              disabled={saving}
-                            >
-                              {saving ? "Saving scores..." : "Save Scores Matrix"}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Stack>
-                </Surface>
-              </div>
-
-              {/* Right Grid Panel: Leaderboard, Tiebreakers & Bonus scores (4 cols) */}
-              <div className="xl:col-span-4 flex flex-col gap-6">
-                {/* Live leaderboard display */}
-                <Surface variant="overlay" className="p-6 bg-surface-raised">
-                  <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
-                    Night Leaderboard
+            <div className="max-w-4xl mx-auto">
+              {/* Team Manager Configuration Panel */}
+              <Surface variant="raised" className="p-6 bg-surface-raised/40">
+                <Stack gap="default">
+                  <Heading level={3} className="text-accent-primary font-display font-semibold">
+                    Configure Event Teams
                   </Heading>
-                  <div className="flex flex-col gap-2 mt-2 max-h-96 overflow-y-auto pr-1">
-                    {computedLeaderboard.map((row) => (
-                      <div
-                        key={row.teamId}
-                        className="flex justify-between items-center p-3 bg-surface-sunken border border-border-default/40 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 text-center font-bold font-mono text-accent-info text-body-sm">
-                            {row.rank}.
-                          </span>
-                          <span className="text-body-sm font-semibold truncate max-w-40">
-                            {row.teamName}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {row.hasUnmarkedRounds && (
-                            <span className="text-caption text-body-xs font-bold text-accent-warning bg-accent-warning/5 px-1.5 py-0.5 rounded border border-accent-warning/10" title="Has incomplete round scores">
-                              Incomplete
-                            </span>
-                          )}
-                          <span className="text-body-sm font-bold text-accent-primary">
-                            {row.totalScore} pts
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                    {teamsList.length === 0 && (
-                      <div className="text-center text-text-subtle text-caption py-4">
-                        Add teams to show standings.
-                      </div>
-                    )}
-                  </div>
-                </Surface>
+                  <Body className="text-body-sm">
+                    Manage the roster of teams competing. Adding/deleting teams immediately updates score grids.
+                  </Body>
 
-                {/* Bonus score adder panel */}
-                <Surface variant="overlay" className="p-6 bg-surface-raised">
-                  <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
-                    Add Bonus Points
-                  </Heading>
-                  <form onSubmit={handleAddBonusScore}>
-                    <Stack gap="small">
-                      <Select
-                        label="Assign Team"
-                        value={newBonusTeamId}
-                        onChange={(e) => setNewBonusTeamId(e.target.value)}
-                        required
-                      >
-                        <option value="">-- Choose Team --</option>
-                        {teamsList.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </Select>
-
-                      <Select
-                        label="Bonus Round Context"
-                        value={newBonusRoundId}
-                        onChange={(e) => setNewBonusRoundId(e.target.value)}
-                      >
-                        <option value="night">Whole Trivia Night (Overall Bonus)</option>
-                        {roundsList
-                          .sort((a, b) => a.orderIndex - b.orderIndex)
-                          .map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.title}
-                            </option>
-                          ))}
-                      </Select>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <Input
-                          label="Points"
-                          type="number"
-                          min="1"
-                          value={newBonusPoints}
-                          onChange={(e) => setNewBonusPoints(e.target.value)}
-                          className="col-span-1"
-                          required
-                        />
-                        <Input
-                          label="Reason Label"
-                          placeholder="e.g. Best Team Name"
-                          value={newBonusLabel}
-                          onChange={(e) => setNewBonusLabel(e.target.value)}
-                          className="col-span-2"
-                          required
-                        />
-                      </div>
-
-                      <Button
-                        type="submit"
-                        variant="secondary"
-                        icon={<PlusCircle size={15} />}
-                        className="w-full mt-2"
-                        disabled={saving || !newBonusTeamId || !newBonusLabel.trim()}
-                      >
-                        Grant Bonus
-                      </Button>
-                    </Stack>
+                  <form onSubmit={handleAddTeam} className="flex gap-2 mt-2">
+                    <Input
+                      placeholder="Enter team name..."
+                      value={teamFormName}
+                      onChange={(e) => setTeamFormName(e.target.value)}
+                      disabled={saving}
+                    />
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      icon={<Plus size={16} />}
+                      disabled={saving || !teamFormName.trim()}
+                      className="shrink-0"
+                    >
+                      Add Team
+                    </Button>
                   </form>
 
-                  {/* Active bonus points list tracker */}
-                  <div className="mt-4 flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                    {bonusScoresList.map((bonus) => {
-                      const matchingTeam = teamsList.find((t) => t.id === bonus.teamId);
-                      const matchingRound = roundsList.find((r) => r.id === bonus.roundId);
-                      return (
-                        <div
-                          key={bonus.id}
-                          className="p-2.5 bg-surface-sunken border border-border-default/40 rounded-lg flex items-center justify-between"
-                        >
-                          <div className="overflow-hidden">
-                            <span className="text-body-xs font-bold text-accent-primary uppercase font-mono tracking-wide">
-                              +{bonus.points} pts
-                            </span>
-                            <div className="text-body-sm font-semibold truncate text-text-primary">
-                              {matchingTeam ? matchingTeam.name : "Unknown team"}
-                            </div>
-                            <div className="text-caption text-body-xs text-text-subtle truncate">
-                              {bonus.label} {matchingRound ? `(${matchingRound.title})` : "(Overall)"}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteBonusScore(bonus.id)}
-                            className="p-1 rounded text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Surface>
-
-                {/* Tiebreaker configurations list */}
-                <Surface variant="overlay" className="p-6 bg-surface-raised">
-                  <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
-                    Tiebreakers Setup
-                  </Heading>
-                  <form onSubmit={handleAddTiebreaker}>
-                    <Stack gap="small">
-                      <Input
-                        label="Tiebreaker Prompt"
-                        placeholder="e.g. In what year was the Slinky invented?"
-                        value={newTiebreakerPrompt}
-                        onChange={(e) => setNewTiebreakerPrompt(e.target.value)}
-                        required
-                      />
-                      <Input
-                        label="Correct Numeric Answer"
-                        placeholder="e.g. 1943"
-                        value={newTiebreakerAnswer}
-                        onChange={(e) => setNewTiebreakerAnswer(e.target.value)}
-                      />
-                      <Button
-                        type="submit"
-                        variant="secondary"
-                        icon={<PlusCircle size={15} />}
-                        className="w-full mt-1"
-                        disabled={saving || !newTiebreakerPrompt.trim()}
-                      >
-                        Add Tiebreaker
-                      </Button>
-                    </Stack>
-                  </form>
-
-                  <div className="mt-4 flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                    {tiebreakersList
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {teamsList
                       .sort((a, b) => a.orderIndex - b.orderIndex)
-                      .map((tb, idx) => (
+                      .map((team) => (
                         <div
-                          key={tb.id}
-                          className="p-2.5 bg-surface-sunken border border-border-default/40 rounded-lg flex items-center justify-between"
+                          key={team.id}
+                          className="pl-3 pr-1 py-1 bg-surface-overlay border border-border-default/60 hover:border-border-strong rounded-xl flex items-center gap-2 group transition-all"
                         >
-                          <div className="overflow-hidden">
-                            <span className="text-body-xs font-bold text-accent-info font-mono">
-                              TB #{idx + 1}
-                            </span>
-                            <div className="text-body-sm font-semibold truncate text-text-primary">
-                              {tb.prompt}
-                            </div>
-                            {tb.answer && (
-                              <div className="text-body-xs text-text-subtle font-mono">
-                                Answer: {tb.answer}
-                              </div>
-                            )}
-                          </div>
+                          <span className="text-body-sm font-semibold">{team.name}</span>
                           <button
-                            onClick={() => handleDeleteTiebreaker(tb.id)}
-                            className="p-1 rounded text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors"
+                            onClick={() => handleDeleteTeam(team.id)}
+                            className="p-1 rounded-md text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors"
+                            title="Delete Team"
                           >
                             <X size={14} />
                           </button>
                         </div>
                       ))}
+                    {teamsList.length === 0 && (
+                      <div className="text-text-subtle text-body-sm text-center py-4 w-full border border-dashed border-border-default/40 rounded-xl">
+                        No teams added yet. Create at least one team above to enter scores.
+                      </div>
+                    )}
                   </div>
-                </Surface>
-              </div>
+                </Stack>
+              </Surface>
             </div>
           )}
+
+          {/* TAB 3: SCORING CONTROL PANEL */}
+          {activeTab === "scoring" && (() => {
+            const currentScoringSubTab = activeScoringSubTab || (roundsList.length > 0 ? "round_" + roundsList.sort((a, b) => a.orderIndex - b.orderIndex)[0]?.id : "bonus");
+
+            return (
+              <div className="flex flex-col gap-6 max-w-6xl mx-auto">
+                {/* Scoring Sub-navigation Header */}
+                <div className="flex border-b border-border-default/40 gap-4 overflow-x-auto whitespace-nowrap pb-1">
+                  {roundsList
+                    .sort((a, b) => a.orderIndex - b.orderIndex)
+                    .map((round, idx) => (
+                      <button
+                        key={round.id}
+                        onClick={() => {
+                          setActiveScoringSubTab("round_" + round.id);
+                          setSelectedRoundId(round.id);
+                        }}
+                        className={`px-5 py-3 font-display font-semibold transition-all border-b-2 capitalize outline-none cursor-pointer ${
+                          currentScoringSubTab === "round_" + round.id
+                            ? "border-accent-primary text-text-primary"
+                            : "border-transparent text-text-subtle hover:text-text-secondary"
+                        }`}
+                      >
+                        Rd {idx + 1} Scores
+                      </button>
+                    ))}
+                  <button
+                    onClick={() => setActiveScoringSubTab("bonus")}
+                    className={`px-5 py-3 font-display font-semibold transition-all border-b-2 outline-none cursor-pointer ${
+                      currentScoringSubTab === "bonus"
+                        ? "border-accent-primary text-text-primary"
+                        : "border-transparent text-text-subtle hover:text-text-secondary"
+                    }`}
+                  >
+                    Bonus Points
+                  </button>
+                  <button
+                    onClick={() => setActiveScoringSubTab("leaderboard")}
+                    className={`px-5 py-3 font-display font-semibold transition-all border-b-2 outline-none cursor-pointer ${
+                      currentScoringSubTab === "leaderboard"
+                        ? "border-accent-primary text-text-primary"
+                        : "border-transparent text-text-subtle hover:text-text-secondary"
+                    }`}
+                  >
+                    Leaderboard
+                  </button>
+                  <button
+                    onClick={() => setActiveScoringSubTab("tiebreakers")}
+                    className={`px-5 py-3 font-display font-semibold transition-all border-b-2 outline-none cursor-pointer ${
+                      currentScoringSubTab === "tiebreakers"
+                        ? "border-accent-primary text-text-primary"
+                        : "border-transparent text-text-subtle hover:text-text-secondary"
+                    }`}
+                  >
+                    Tiebreakers
+                  </button>
+                </div>
+
+                {/* Sub-tab Content Renders */}
+                {currentScoringSubTab.startsWith("round_") && selectedRound && (
+                  <div className="max-w-4xl">
+                    <Surface variant="raised" className="p-6 bg-surface-raised/40">
+                      <Stack gap="default">
+                        <div>
+                          <Heading level={3} className="text-accent-primary font-display font-semibold">
+                            Score Entry Matrix — {selectedRound.title}
+                          </Heading>
+                          <Body className="text-body-sm mt-1">
+                            Enter team scores for the active round. Leave fields blank for unmarked teams.
+                          </Body>
+                        </div>
+
+                        <div className="mt-3">
+                          <div className="flex justify-between items-center mb-3 bg-surface-sunken p-3 rounded-xl border border-border-default/30">
+                            <span className="text-body-sm font-semibold text-text-secondary">
+                              Active Layout: <span className="text-text-primary capitalize">{selectedRound.answerSheetLayout || "N/A"}</span>
+                            </span>
+                            <span className="text-body-sm font-semibold text-accent-info">
+                              Calculated Max Score: {calculateRoundMaxScore(selectedRoundQuestions)} points
+                            </span>
+                          </div>
+
+                          {teamsList.length === 0 ? (
+                            <div className="text-center text-text-subtle py-8">
+                              Create teams in the Teams tab to display the scoring matrix.
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-3">
+                              {teamsList
+                                .sort((a, b) => a.orderIndex - b.orderIndex)
+                                .map((team) => {
+                                  const errorText = scoreErrors[team.id];
+                                  const isOverrideChecked = scoresOverrides[team.id] || false;
+                                  return (
+                                    <div
+                                      key={team.id}
+                                      className="p-4 bg-surface-overlay border border-border-default/40 rounded-xl flex flex-col gap-3 transition-colors hover:bg-surface-overlay/80"
+                                    >
+                                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                                        <span className="font-semibold text-body-sm text-text-primary shrink-0">
+                                          {team.name}
+                                        </span>
+
+                                        <div className="flex items-center gap-4 w-full md:w-auto">
+                                          <div className="w-24 shrink-0">
+                                            <input
+                                              type="number"
+                                              placeholder="Unmarked"
+                                              value={scoresInput[team.id] || ""}
+                                              onChange={(e) =>
+                                                handleScoreInputChange(team.id, e.target.value)
+                                              }
+                                              className="w-full text-center px-3 py-2 rounded-xl bg-surface-sunken border border-border-default text-text-primary text-body-sm focus:outline-none focus:border-accent-primary"
+                                            />
+                                          </div>
+
+                                          {errorText && (
+                                            <div className="flex items-center gap-2">
+                                              <label className="flex items-center gap-1.5 cursor-pointer text-body-sm text-accent-warning font-semibold select-none">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isOverrideChecked}
+                                                  onChange={(e) =>
+                                                    setScoresOverrides((prev) => ({
+                                                      ...prev,
+                                                      [team.id]: e.target.checked,
+                                                    }))
+                                                  }
+                                                  className="w-4 h-4 accent-accent-warning cursor-pointer"
+                                                />
+                                                Bypass Limit
+                                              </label>
+                                              {isOverrideChecked && (
+                                                <input
+                                                  type="text"
+                                                  placeholder="Bypass reason..."
+                                                  value={scoresOverrideReasons[team.id] || ""}
+                                                  onChange={(e) =>
+                                                    setScoresOverrideReasons((prev) => ({
+                                                      ...prev,
+                                                      [team.id]: e.target.value,
+                                                    }))
+                                                  }
+                                                  className="px-2 py-1 bg-surface-sunken border border-border-default rounded text-body-xs w-36 outline-none"
+                                                />
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {errorText && (
+                                        <div className="text-body-sm text-accent-warning font-semibold flex items-center gap-1">
+                                          <span>⚠️</span>
+                                          <span>{errorText}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                              <Button
+                                onClick={handleSaveScoresGrid}
+                                variant="primary"
+                                icon={<Save size={16} />}
+                                className="w-full mt-4"
+                                disabled={saving}
+                              >
+                                {saving ? "Saving scores..." : "Save Scores Matrix"}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </Stack>
+                    </Surface>
+                  </div>
+                )}
+
+                {currentScoringSubTab === "bonus" && (
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                    {/* Left Column: Form (5 cols) */}
+                    <div className="md:col-span-5">
+                      <Surface variant="overlay" className="p-6 bg-surface-raised">
+                        <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
+                          Add Bonus Points
+                        </Heading>
+                        <form onSubmit={handleAddBonusScore}>
+                          <Stack gap="small">
+                            <Select
+                              label="Assign Team"
+                              value={newBonusTeamId}
+                              onChange={(e) => setNewBonusTeamId(e.target.value)}
+                              required
+                            >
+                              <option value="">-- Choose Team --</option>
+                              {teamsList.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </Select>
+
+                            <Select
+                              label="Bonus Round Context"
+                              value={newBonusRoundId}
+                              onChange={(e) => setNewBonusRoundId(e.target.value)}
+                            >
+                              <option value="night">Whole Trivia Night (Overall Bonus)</option>
+                              {roundsList
+                                .sort((a, b) => a.orderIndex - b.orderIndex)
+                                .map((r) => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.title}
+                                  </option>
+                                ))}
+                            </Select>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input
+                                label="Points"
+                                type="number"
+                                min="1"
+                                value={newBonusPoints}
+                                onChange={(e) => setNewBonusPoints(e.target.value)}
+                                className="col-span-1"
+                                required
+                              />
+                              <Input
+                                label="Reason Label"
+                                placeholder="e.g. Best Team Name"
+                                value={newBonusLabel}
+                                onChange={(e) => setNewBonusLabel(e.target.value)}
+                                className="col-span-2"
+                                required
+                              />
+                            </div>
+
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              icon={<PlusCircle size={15} />}
+                              className="w-full mt-2"
+                              disabled={saving || !newBonusTeamId || !newBonusLabel.trim()}
+                            >
+                              Grant Bonus
+                            </Button>
+                          </Stack>
+                        </form>
+                      </Surface>
+                    </div>
+
+                    {/* Right Column: List (7 cols) */}
+                    <div className="md:col-span-7">
+                      <Surface variant="overlay" className="p-6 bg-surface-raised min-h-[300px]">
+                        <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
+                          Active Bonus Points Tracker
+                        </Heading>
+                        <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1 mt-2">
+                          {bonusScoresList.map((bonus) => {
+                            const matchingTeam = teamsList.find((t) => t.id === bonus.teamId);
+                            const matchingRound = roundsList.find((r) => r.id === bonus.roundId);
+                            return (
+                              <div
+                                key={bonus.id}
+                                className="p-2.5 bg-surface-sunken border border-border-default/40 rounded-lg flex items-center justify-between"
+                              >
+                                <div className="overflow-hidden">
+                                  <span className="text-body-xs font-bold text-accent-primary uppercase font-mono tracking-wide">
+                                    +{bonus.points} pts
+                                  </span>
+                                  <div className="text-body-sm font-semibold truncate text-text-primary">
+                                    {matchingTeam ? matchingTeam.name : "Unknown team"}
+                                  </div>
+                                  <div className="text-caption text-body-xs text-text-subtle truncate">
+                                    {bonus.label} {matchingRound ? `(${matchingRound.title})` : "(Overall)"}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteBonusScore(bonus.id)}
+                                  className="p-1 rounded text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors cursor-pointer"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                          {bonusScoresList.length === 0 && (
+                            <div className="text-center text-text-subtle text-caption py-8 border border-dashed border-border-default/40 rounded-xl">
+                              No bonus points granted yet.
+                            </div>
+                          )}
+                        </div>
+                      </Surface>
+                    </div>
+                  </div>
+                )}
+
+                {currentScoringSubTab === "leaderboard" && (
+                  <div className="max-w-4xl">
+                    {/* Live leaderboard display */}
+                    <Surface variant="overlay" className="p-6 bg-surface-raised">
+                      <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
+                        Live Leaderboard Standings
+                      </Heading>
+                      <div className="flex flex-col gap-2 mt-4 max-h-[550px] overflow-y-auto pr-1">
+                        {computedLeaderboard.map((row) => (
+                          <div
+                            key={row.teamId}
+                            className="flex justify-between items-center p-3.5 bg-surface-sunken border border-border-default/40 rounded-xl"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="w-6 text-center font-bold font-mono text-accent-info text-body-sm">
+                                {row.rank}.
+                              </span>
+                              <span className="text-body-sm font-semibold truncate max-w-64">
+                                {row.teamName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {row.hasUnmarkedRounds && (
+                                <span className="text-caption text-body-xs font-bold text-accent-warning bg-accent-warning/5 px-1.5 py-0.5 rounded border border-accent-warning/10" title="Has incomplete round scores">
+                                  Incomplete
+                                </span>
+                              )}
+                              <span className="text-body-sm font-bold text-accent-primary">
+                                {row.totalScore} pts
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {teamsList.length === 0 && (
+                          <div className="text-center text-text-subtle text-caption py-8 border border-dashed border-border-default/40 rounded-xl">
+                            No teams registered. Standings will show once teams compete.
+                          </div>
+                        )}
+                      </div>
+                    </Surface>
+                  </div>
+                )}
+
+                {currentScoringSubTab === "tiebreakers" && (
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                    {/* Left Column: Form (5 cols) */}
+                    <div className="md:col-span-5">
+                      <Surface variant="overlay" className="p-6 bg-surface-raised">
+                        <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
+                          Configure Tiebreakers Setup
+                        </Heading>
+                        <form onSubmit={handleAddTiebreaker}>
+                          <Stack gap="small">
+                            <Input
+                              label="Tiebreaker Prompt"
+                              placeholder="e.g. In what year was the Slinky invented?"
+                              value={newTiebreakerPrompt}
+                              onChange={(e) => setNewTiebreakerPrompt(e.target.value)}
+                              required
+                            />
+                            <Input
+                              label="Correct Numeric Answer"
+                              placeholder="e.g. 1943"
+                              value={newTiebreakerAnswer}
+                              onChange={(e) => setNewTiebreakerAnswer(e.target.value)}
+                            />
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              icon={<PlusCircle size={15} />}
+                              className="w-full mt-1"
+                              disabled={saving || !newTiebreakerPrompt.trim()}
+                            >
+                              Add Tiebreaker
+                            </Button>
+                          </Stack>
+                        </form>
+                      </Surface>
+                    </div>
+
+                    {/* Right Column: List (7 cols) */}
+                    <div className="md:col-span-7">
+                      <Surface variant="overlay" className="p-6 bg-surface-raised min-h-[300px]">
+                        <Heading level={3} className="text-accent-primary mb-3 font-display font-semibold">
+                          Active Tiebreakers Checklist
+                        </Heading>
+                        <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1 mt-2">
+                          {tiebreakersList
+                            .sort((a, b) => a.orderIndex - b.orderIndex)
+                            .map((tb, idx) => (
+                              <div
+                                key={tb.id}
+                                className="p-2.5 bg-surface-sunken border border-border-default/40 rounded-lg flex items-center justify-between"
+                              >
+                                <div className="overflow-hidden">
+                                  <span className="text-body-xs font-bold text-accent-info font-mono">
+                                    TB #{idx + 1}
+                                  </span>
+                                  <div className="text-body-sm font-semibold truncate text-text-primary">
+                                    {tb.prompt}
+                                  </div>
+                                  {tb.answer && (
+                                    <div className="text-body-xs text-text-subtle font-mono">
+                                      Answer: {tb.answer}
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteTiebreaker(tb.id)}
+                                  className="p-1 rounded text-text-subtle hover:text-accent-danger hover:bg-accent-danger/10 transition-colors cursor-pointer"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          {tiebreakersList.length === 0 && (
+                            <div className="text-center text-text-subtle text-caption py-8 border border-dashed border-border-default/40 rounded-xl">
+                              No tiebreakers added yet.
+                            </div>
+                          )}
+                        </div>
+                      </Surface>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* TAB 3: PRINT CENTRE */}
           {activeTab === "print" && (
@@ -1640,6 +1751,50 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                   Download beautiful, ink-friendly, auto-paginated A4 sheets rendered directly server-side with deterministic seating cartoons.
                 </Body>
               </div>
+
+              <Surface variant="raised" className="p-6 border border-accent-primary/20 bg-accent-primary/5 rounded-2xl">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div>
+                    <Heading level={3} className="text-accent-primary font-display font-semibold mb-1 flex items-center gap-2">
+                      <Printer className="text-accent-primary" size={20} />
+                      Bulk Event Packages
+                    </Heading>
+                    <Body className="text-body-sm text-text-secondary">
+                      Download all answer sheets or marking guides for all printable rounds compiled into a single convenient multi-page A4 PDF document.
+                    </Body>
+                  </div>
+                  <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                    <a
+                      href={`/api/print/trivia-nights/${triviaNightId}/answer-sheets?token=${editToken}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="no-underline flex-1 md:flex-initial"
+                    >
+                      <Button
+                        variant="primary"
+                        icon={<Download size={16} />}
+                        className="py-2.5 px-4 font-semibold text-body-sm justify-center w-full"
+                      >
+                        All Answer Sheets (Pack)
+                      </Button>
+                    </a>
+                    <a
+                      href={`/api/print/trivia-nights/${triviaNightId}/marking-guides?token=${editToken}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="no-underline flex-1 md:flex-initial"
+                    >
+                      <Button
+                        variant="secondary"
+                        icon={<Download size={16} />}
+                        className="py-2.5 px-4 font-semibold text-body-sm justify-center w-full"
+                      >
+                        All Marking Guides (Pack)
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              </Surface>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {roundsList

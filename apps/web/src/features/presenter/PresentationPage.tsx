@@ -15,8 +15,10 @@ import {
   Award,
   HelpCircle,
   Trophy,
+  Settings,
+  X,
 } from "lucide-react";
-import { calculateLeaderboards } from "@trivia/domain";
+import { calculateLeaderboards, derivePresentationRoundState } from "@trivia/domain";
 
 interface PresentationPageProps {
   triviaNightId: string;
@@ -33,7 +35,7 @@ type SlideType =
   | { type: "answer_walkthrough"; roundIndex: number; questionIndex: number }
   | { type: "answer_recap"; roundIndex: number }
   | { type: "round_leaderboard"; roundIndex: number }
-  | { type: "overall_leaderboard" }
+  | { type: "overall_leaderboard"; upToRoundIndex: number }
   | { type: "tiebreakers" }
   | { type: "results" };
 
@@ -61,13 +63,29 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
 
+  // Slide presentation options & recap modal states
+  const [includeQuestionRecaps, setIncludeQuestionRecaps] = useState(true);
+  const [includeAnswerRecaps, setIncludeAnswerRecaps] = useState(true);
+  const [showSettingsPopover, setShowSettingsPopover] = useState(false);
+  const [recapModal, setRecapModal] = useState<{ type: "questions" | "answers"; roundIndex: number } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use a ref to store the latest fetchPresentationData function to avoid stale closures in setInterval
+  const fetchPresentationDataRef = useRef<any>(null);
+  useEffect(() => {
+    fetchPresentationDataRef.current = fetchPresentationData;
+  });
 
   // Poll for host changes if we don't have edit access
   useEffect(() => {
-    fetchPresentationData();
+    if (fetchPresentationDataRef.current) {
+      fetchPresentationDataRef.current();
+    }
     const interval = setInterval(() => {
-      fetchPresentationData(true); // silent refresh
+      if (fetchPresentationDataRef.current) {
+        fetchPresentationDataRef.current(true); // silent refresh
+      }
     }, 5000);
 
     return () => clearInterval(interval);
@@ -109,7 +127,16 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
 
       const data = await response.json();
       setTrivia(data.triviaNight);
-      setRounds(data.rounds || []);
+      
+      let clientRounds = data.rounds || [];
+      if (data.questions && data.questions.length > 0) {
+        clientRounds = clientRounds.map((r: any) => {
+          const roundQ = data.questions.filter((q: any) => q.roundId === r.id);
+          return derivePresentationRoundState(r, roundQ, !!r.answersRevealed);
+        });
+      }
+
+      setRounds(clientRounds);
       setTeams(data.teams || []);
       setTiebreakers(data.tiebreakers || []);
 
@@ -122,16 +149,12 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
 
       if (scoresRes.ok) {
         const scoresData = await scoresRes.json();
-        // Since leaderboards are calculated server side, we can extract details or compute them
-        // Let's store calculated row structures
-        if (scoresData.leaderboard) {
-          // Sync teams list order or standings if needed
+        if (scoresData.scores) {
+          setScoresList(scoresData.scores);
         }
-      }
-
-      // If slide deck is not initialized yet, compile it
-      if (data.rounds && data.rounds.length > 0 && slides.length === 0) {
-        buildSlideDeck(data.rounds);
+        if (scoresData.bonusScores) {
+          setBonusScoresList(scoresData.bonusScores);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -141,8 +164,15 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
     }
   };
 
+  // Rebuild the slide deck when rounds or presentation settings update
+  useEffect(() => {
+    if (rounds && rounds.length > 0) {
+      buildSlideDeck(rounds, tiebreakers);
+    }
+  }, [rounds, tiebreakers, includeQuestionRecaps, includeAnswerRecaps]);
+
   // Compile slide navigation sequence
-  const buildSlideDeck = (loadedRounds: any[]) => {
+  const buildSlideDeck = (loadedRounds: any[], loadedTiebreakers: any[]) => {
     const deck: SlideType[] = [];
 
     // 1. Title Slide
@@ -162,7 +192,9 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
         });
 
         // 4. Question Recap
-        deck.push({ type: "question_recap", roundIndex: roundIdx });
+        if (includeQuestionRecaps) {
+          deck.push({ type: "question_recap", roundIndex: roundIdx });
+        }
 
         // 5. Answer Walkthrough (deliberate reveal slots)
         round.questions.forEach((_: any, qIdx: number) => {
@@ -170,15 +202,20 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
         });
 
         // 6. Answer Recap
-        deck.push({ type: "answer_recap", roundIndex: roundIdx });
+        if (includeAnswerRecaps) {
+          deck.push({ type: "answer_recap", roundIndex: roundIdx });
+        }
       }
 
       // 7. Round Leaderboard
       deck.push({ type: "round_leaderboard", roundIndex: roundIdx });
+
+      // 7b. Overall Leaderboard
+      deck.push({ type: "overall_leaderboard", upToRoundIndex: roundIdx });
     });
 
     // 8. Tiebreakers
-    if (tiebreakers.length > 0) {
+    if (loadedTiebreakers && loadedTiebreakers.length > 0) {
       deck.push({ type: "tiebreakers" });
     }
 
@@ -186,16 +223,21 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
     deck.push({ type: "results" });
 
     setSlides(deck);
-    setCurrentSlideIndex(0);
+    setCurrentSlideIndex((prev) => {
+      if (prev >= deck.length) return 0;
+      return prev;
+    });
   };
 
   const handleNext = () => {
+    setShowSettingsPopover(false);
     if (currentSlideIndex < slides.length - 1) {
       setCurrentSlideIndex((prev) => prev + 1);
     }
   };
 
   const handlePrev = () => {
+    setShowSettingsPopover(false);
     if (currentSlideIndex > 0) {
       setCurrentSlideIndex((prev) => prev - 1);
     }
@@ -678,7 +720,33 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
       }
 
       case "overall_leaderboard": {
-        const overallRanked = computedLeaderboard;
+        const sortedRounds = [...rounds].sort((a, b) => a.orderIndex - b.orderIndex);
+        const upToRoundIdx = activeSlide.upToRoundIndex;
+
+        // Filter rounds up to this round index
+        const roundsFiltered = sortedRounds.slice(0, upToRoundIdx + 1);
+        const roundIdsFiltered = new Set(roundsFiltered.map((r) => r.id));
+
+        // Filter scores for only the active rounds
+        const scoresFiltered = scoresList.filter((s) => roundIdsFiltered.has(s.roundId));
+
+        // Filter bonus scores: round-level bonuses must belong to the active rounds.
+        // Night-level bonuses (no roundId) are only included if this is the final round.
+        const bonusScoresFiltered = bonusScoresList.filter((b) => {
+          if (b.roundId) {
+            return roundIdsFiltered.has(b.roundId);
+          }
+          // Night bonus
+          return upToRoundIdx === sortedRounds.length - 1;
+        });
+
+        const overallRanked = calculateLeaderboards(
+          teams,
+          roundsFiltered,
+          scoresFiltered,
+          bonusScoresFiltered
+        );
+
         return (
           <Stack align="stretch" gap="large" className="w-full max-w-4xl px-8 select-none py-6">
             <div className="text-center mb-6">
@@ -688,6 +756,9 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
               <Heading level={1} className="text-4xl md:text-5xl text-text-presentation font-bold font-display mt-1">
                 Overall Leaderboard
               </Heading>
+              <div className="text-text-secondary text-caption font-semibold mt-2">
+                Cumulative standings up to {roundsFiltered[roundsFiltered.length - 1]?.title || `Round ${upToRoundIdx + 1}`}
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-2">
@@ -823,7 +894,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
     }
   };
 
-  const computedLeaderboard = calculateLeaderboards(teams, rounds, [], []);
+  const computedLeaderboard = calculateLeaderboards(teams, rounds, scoresList, bonusScoresList);
 
   return (
     <div
@@ -881,7 +952,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
           <Surface
             variant="overlay"
             glass={true}
-            className="px-6 py-3 border border-white/10 bg-black/90 flex items-center gap-6 rounded-2xl shadow-2xl backdrop-blur-2xl"
+            className="px-6 py-3 border border-white/10 bg-black/90 flex items-center gap-6 rounded-2xl shadow-2xl backdrop-blur-2xl animate-fade-in"
           >
             <Button
               variant="ghost"
@@ -904,6 +975,90 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
               icon={<ChevronRight size={18} />}
               className="text-text-secondary hover:text-text-presentation"
             />
+
+            <div className="border-r border-white/20 h-6"></div>
+
+            {/* Quick Recap Action Buttons (Active for regular rounds) */}
+            {activeSlide &&
+              ("roundIndex" in activeSlide) &&
+              rounds[activeSlide.roundIndex]?.type !== "special_round" && (
+                <>
+                  <button
+                    onClick={() => setRecapModal({ type: "questions", roundIndex: activeSlide.roundIndex })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/30 text-body-xs font-bold text-text-presentation transition-all cursor-pointer shadow-md select-none"
+                    title="Quick recap of all questions in this round"
+                  >
+                    📋 Recap Questions
+                  </button>
+                  <button
+                    onClick={() => setRecapModal({ type: "answers", roundIndex: activeSlide.roundIndex })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/30 text-body-xs font-bold text-text-presentation transition-all cursor-pointer shadow-md select-none"
+                    title="Quick recap of all answers in this round"
+                  >
+                    🔑 Recap Answers
+                  </button>
+                  <div className="border-r border-white/20 h-6"></div>
+                </>
+              )}
+
+            {/* Presentation Options Dropup */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSettingsPopover(!showSettingsPopover)}
+                className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                  showSettingsPopover
+                    ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                    : "border-white/15 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-presentation"
+                }`}
+                title="Slide Settings"
+              >
+                <Settings size={18} />
+              </button>
+
+              {showSettingsPopover && (
+                <div className="absolute bottom-full right-0 mb-3 w-72 p-4 bg-black/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col gap-4 animate-fade-in z-50">
+                  <span className="text-body-xs font-extrabold uppercase tracking-wider text-accent-primary font-display">
+                    Presentation Options
+                  </span>
+                  
+                  <div className="flex flex-col gap-3">
+                    <label className="flex items-start gap-3 cursor-pointer text-left select-none group">
+                      <input
+                        type="checkbox"
+                        checked={includeQuestionRecaps}
+                        onChange={(e) => setIncludeQuestionRecaps(e.target.checked)}
+                        className="mt-0.5 rounded border-white/20 bg-white/5 text-accent-primary focus:ring-accent-primary cursor-pointer w-4 h-4"
+                      />
+                      <div>
+                        <span className="text-body-xs font-bold text-text-presentation group-hover:text-accent-primary transition-colors block">
+                          Include Question Recaps
+                        </span>
+                        <span className="text-[10px] text-text-secondary leading-normal block mt-0.5">
+                          Show a slide summarizing all questions before the answers walkthrough.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer text-left select-none group">
+                      <input
+                        type="checkbox"
+                        checked={includeAnswerRecaps}
+                        onChange={(e) => setIncludeAnswerRecaps(e.target.checked)}
+                        className="mt-0.5 rounded border-white/20 bg-white/5 text-accent-primary focus:ring-accent-primary cursor-pointer w-4 h-4"
+                      />
+                      <div>
+                        <span className="text-body-xs font-bold text-text-presentation group-hover:text-accent-primary transition-colors block">
+                          Include Answer Recaps
+                        </span>
+                        <span className="text-[10px] text-text-secondary leading-normal block mt-0.5">
+                          Show a slide summarizing all solutions at the very end of the round.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="border-r border-white/20 h-6"></div>
 
@@ -931,6 +1086,115 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
         >
           <Tv size={16} />
         </button>
+      )}
+
+      {/* ON-DEMAND RECAP MODAL OVERLAY */}
+      {recapModal && (
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-fade-in">
+          <div className="w-full max-w-4xl bg-black/90 border border-white/10 rounded-3xl p-8 flex flex-col shadow-2xl max-h-[85vh] relative overflow-hidden">
+            {/* Close Button */}
+            <button
+              onClick={() => setRecapModal(null)}
+              className="absolute top-6 right-6 p-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-presentation cursor-pointer transition-all shadow-md"
+              title="Close Recap"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="border-b border-white/10 pb-4 mb-6 pr-12">
+              <span className="text-accent-primary text-caption font-extrabold uppercase tracking-widest block font-sans">
+                Round {recapModal.roundIndex + 1} Recap
+              </span>
+              <Heading level={1} className="text-3xl font-extrabold text-text-presentation font-display mt-1">
+                {rounds[recapModal.roundIndex]?.title} — All {recapModal.type === "questions" ? "Questions" : "Answers"}
+              </Heading>
+            </div>
+
+            {/* Modal Content Scroll Area */}
+            <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4">
+              {rounds[recapModal.roundIndex]?.questions
+                ?.sort((a: any, b: any) => a.orderIndex - b.orderIndex)
+                .map((q: any) => {
+                  const hasAnswersPayload = !!rounds[recapModal.roundIndex]?.isRevealed && !!rounds[recapModal.roundIndex]?.answers;
+                  const ansData = hasAnswersPayload ? rounds[recapModal.roundIndex].answers[q.id] : null;
+
+                  return (
+                    <Surface
+                      key={q.id}
+                      variant="raised"
+                      className="p-5 bg-white/5 border border-white/10 flex items-start gap-4 rounded-2xl shadow-lg transition-transform hover:translate-x-1 duration-150"
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold font-mono text-base shrink-0 ${
+                        recapModal.type === "answers" 
+                          ? "bg-accent-success/15 text-accent-success border border-accent-success/20"
+                          : "bg-accent-primary/15 text-accent-primary border border-accent-primary/20"
+                      }`}>
+                        {q.orderIndex}
+                      </div>
+
+                      <div className="overflow-hidden w-full flex flex-col gap-2">
+                        <Body className="text-text-presentation font-bold text-base leading-snug font-sans">
+                          {q.prompt}
+                        </Body>
+
+                        {/* If multiple choice question and recapType is questions, show options */}
+                        {recapModal.type === "questions" && q.type === "multiple_choice" && q.options && (
+                          <div className="flex flex-wrap gap-2.5 mt-1">
+                            {q.options.map((o: any) => (
+                              <span key={o.id} className="text-body-xs font-semibold px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary font-sans">
+                                <span className="text-accent-primary font-mono font-bold mr-1.5">{o.label}</span>
+                                {o.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Show answers only for answers recap type */}
+                        {recapModal.type === "answers" && (
+                          <div className="mt-2 flex items-center">
+                            {ansData ? (
+                              <div className="flex flex-col gap-1 w-full">
+                                <span className="text-[10px] text-accent-success uppercase tracking-wider font-extrabold font-display font-sans">
+                                  Correct Answer
+                                </span>
+                                <span className="text-accent-success font-bold text-base font-sans leading-none mt-0.5">
+                                  {q.type === "multipoint" && ansData.answers ? (
+                                    ansData.answers.join(" • ")
+                                  ) : q.type === "multiple_choice" && ansData ? (
+                                    `${ansData.correctOptionLabel} — ${ansData.correctOptionText}`
+                                  ) : (
+                                    ansData.answer || "N/A"
+                                  )}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-accent-warning/10 border border-accent-warning/20 rounded-lg text-accent-warning text-body-xs font-semibold select-none font-sans">
+                                <span>🔒</span> Answers not yet unlocked by host
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </Surface>
+                  );
+                })}
+              
+              {(!rounds[recapModal.roundIndex]?.questions || rounds[recapModal.roundIndex].questions.length === 0) && (
+                <div className="text-center text-text-secondary py-12 font-medium">
+                  No questions in this round.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-white/10 pt-4 mt-6 flex justify-end">
+              <Button onClick={() => setRecapModal(null)} variant="secondary">
+                Close Recap
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
