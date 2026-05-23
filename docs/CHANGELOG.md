@@ -2,6 +2,11 @@
 
 Notable changes by version. Newest at the top. Bumps follow `docs/VERSIONING.md`.
 
+## 1.3.2 - 2026-05-23
+
+- **Database Connection Verification DX**:
+  - Enhanced production database initialization in `packages/db/src/db.ts` to explicitly validate the presence of the `DATABASE_URL` environment variable under production settings, outputting a descriptive error message instead of failing silently with generic TCP connection refusals.
+
 ## 1.3.1 - 2026-05-23
 
 - **Deployment Hotfix**:
