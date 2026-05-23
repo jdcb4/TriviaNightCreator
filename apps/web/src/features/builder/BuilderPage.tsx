@@ -47,10 +47,10 @@ interface BuilderPageProps {
   triviaNightId: string;
   editToken: string;
   onExit: () => void;
-  onLaunchPresenter: (presentToken: string) => void;
+  onLaunchPresenter: (presentToken: string, hostControl?: boolean) => void;
 }
 
-type TabType = "rounds" | "branding" | "print" | "teams" | "scoring";
+type TabType = "overview" | "rounds" | "branding" | "print" | "teams" | "scoring";
 
 export const BuilderPage: React.FC<BuilderPageProps> = ({
   triviaNightId,
@@ -59,7 +59,9 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
   onLaunchPresenter,
 }) => {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<TabType>("rounds");
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [specialMaxPointsInput, setSpecialMaxPointsInput] = useState<number>(10);
+  const [specialInstructionsInput, setSpecialInstructionsInput] = useState<string>("");
   const [activeScoringSubTab, setActiveScoringSubTab] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -209,6 +211,14 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
     setScoresOverrideReasons(initialReasons);
     setScoreErrors({});
   }, [selectedRoundId, teamsList, scoresList]);
+
+  // Synchronize special round configurations form
+  useEffect(() => {
+    if (selectedRound && selectedRound.type === "special_round") {
+      setSpecialInstructionsInput(selectedRound.description || "");
+      setSpecialMaxPointsInput(selectedRound.specialRoundConfig?.maxPoints || 10);
+    }
+  }, [selectedRoundId, roundsList]);
 
   // Sync form when clicking on a question slot
   const handleSelectSlot = (slotNumber: number) => {
@@ -563,7 +573,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
 
   // Score validation check with overrides
   const handleScoreInputChange = (teamId: string, value: string) => {
-    const roundMax = calculateRoundMaxScore(selectedRoundQuestions);
+    const roundMax = calculateRoundMaxScore(selectedRoundQuestions, selectedRound?.specialRoundConfig?.maxPoints);
     const numeric = parseInt(value, 10);
 
     const updatedInputs = { ...scoresInput, [teamId]: value };
@@ -598,7 +608,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
   const handleSaveScoresGrid = async () => {
     setSaving(true);
     try {
-      const roundMax = calculateRoundMaxScore(selectedRoundQuestions);
+      const roundMax = calculateRoundMaxScore(selectedRoundQuestions, selectedRound?.specialRoundConfig?.maxPoints);
       const scoresPayload = Object.keys(scoresInput).map((teamId) => {
         const valStr = scoresInput[teamId] || "";
         const val = valStr === "" ? null : parseInt(valStr, 10);
@@ -776,6 +786,118 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
     }
   };
 
+  const handleCreateRound = async () => {
+    setSaving(true);
+    try {
+      const nextOrder = roundsList.length > 0 ? Math.max(...roundsList.map((r) => r.orderIndex)) + 1 : 1;
+      const response = await fetch(`/api/trivia-nights/${triviaNightId}/rounds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Trivia-Token": editToken,
+        },
+        body: JSON.stringify({
+          title: `Round ${nextOrder}`,
+          orderIndex: nextOrder,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRoundsList((prev) => [...prev, data.round]);
+        setSelectedRoundId(data.round.id); // Switch to the new round immediately
+        toast.success(`Created Round ${nextOrder}!`);
+      } else {
+        throw new Error("Failed to create round");
+      }
+    } catch (err) {
+      toast.error("Error adding round");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRound = async (roundId: string) => {
+    if (roundsList.length <= 1) {
+      toast.error("You must keep at least one round in the quiz.");
+      return;
+    }
+    const targetRound = roundsList.find((r) => r.id === roundId);
+    if (!window.confirm(`Are you sure you want to delete ${targetRound?.title || "this round"}? This will permanently delete all associated questions, scores, and print layouts.`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/rounds/${roundId}`, {
+        method: "DELETE",
+        headers: {
+          "X-Trivia-Token": editToken,
+        },
+      });
+
+      if (response.ok) {
+        const remaining = roundsList.filter((r) => r.id !== roundId);
+        setRoundsList(remaining);
+        
+        if (remaining.length > 0) {
+          const sorted = [...remaining].sort((a, b) => a.orderIndex - b.orderIndex);
+          setSelectedRoundId(sorted[0]?.id || "");
+        }
+        
+        setQuestionsList((prev) => prev.filter((q) => q.roundId !== roundId));
+        toast.success("Round deleted successfully.");
+      } else {
+        throw new Error("Failed to delete round");
+      }
+    } catch (err) {
+      toast.error("Error deleting round");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSpecialRoundSettings = async () => {
+    if (!selectedRoundId) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/rounds/${selectedRoundId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Trivia-Token": editToken,
+        },
+        body: JSON.stringify({
+          description: specialInstructionsInput,
+          specialRoundConfig: {
+            maxPoints: specialMaxPointsInput,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        setRoundsList((prev) =>
+          prev.map((r) =>
+            r.id === selectedRoundId
+              ? {
+                  ...r,
+                  description: specialInstructionsInput,
+                  specialRoundConfig: { maxPoints: specialMaxPointsInput },
+                }
+              : r
+          )
+        );
+        toast.success("Special round configurations saved!");
+      } else {
+        throw new Error("Failed to save round settings");
+      }
+    } catch (err) {
+      toast.error("Error saving special round settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-text-secondary text-lg">
@@ -801,6 +923,16 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
 
   // Derive rankings for visual team display
   const computedLeaderboard = calculateLeaderboards(teamsList, roundsList, scoresList, bonusScoresList);
+
+  // Compute total possible trivia points across all rounds
+  const totalTriviaPoints = roundsList.reduce((sum, r) => {
+    if (r.type === "special_round") {
+      return sum + (r.specialRoundConfig?.maxPoints || 0);
+    } else {
+      const roundQ = questionsList.filter((q) => q.roundId === r.id);
+      return sum + calculateRoundMaxScore(roundQ);
+    }
+  }, 0);
 
   return (
     <div className="min-h-screen flex flex-col bg-surface-base text-text-primary">
@@ -837,24 +969,40 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
       {/* 2. SIDEBAR AND CONTENT SPLIT */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Side Tab Navigation Panel */}
-        <aside className="w-64 border-r border-border-default/40 bg-surface-sunken flex flex-col p-4 gap-4">
+        <aside className="w-64 border-r border-border-default/40 bg-surface-sunken flex flex-col p-4 gap-4 shrink-0">
+          <Stack gap="small">
+            <div className="text-body-xs font-bold uppercase tracking-wider text-text-subtle/80 px-3 mb-1">
+              Start
+            </div>
+            <Button
+              variant={activeTab === "overview" ? "primary" : "ghost"}
+              icon={<Layers size={18} />}
+              onClick={() => setActiveTab("overview")}
+              className="justify-start py-3 w-full"
+            >
+              Overview Dashboard
+            </Button>
+          </Stack>
+
+          <div className="border-t border-border-default/20 my-1"></div>
+
           <Stack gap="small">
             <div className="text-body-xs font-bold uppercase tracking-wider text-text-subtle/80 px-3 mb-1">
               Preparation
             </div>
             <Button
               variant={activeTab === "rounds" ? "primary" : "ghost"}
-              icon={<Layers size={18} />}
+              icon={<ClipboardList size={18} />}
               onClick={() => setActiveTab("rounds")}
-              className="justify-start py-3"
+              className="justify-start py-3 w-full"
             >
-              Rounds & Questions
+              Quiz Builder
             </Button>
             <Button
               variant={activeTab === "branding" ? "primary" : "ghost"}
               icon={<Settings size={18} />}
               onClick={() => setActiveTab("branding")}
-              className="justify-start py-3"
+              className="justify-start py-3 w-full"
             >
               Event & Branding
             </Button>
@@ -862,7 +1010,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
               variant={activeTab === "print" ? "primary" : "ghost"}
               icon={<Printer size={18} />}
               onClick={() => setActiveTab("print")}
-              className="justify-start py-3"
+              className="justify-start py-3 w-full"
             >
               Print Centre
             </Button>
@@ -878,20 +1026,20 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
               variant={activeTab === "teams" ? "primary" : "ghost"}
               icon={<Users size={18} />}
               onClick={() => setActiveTab("teams")}
-              className="justify-start py-3"
+              className="justify-start py-3 w-full"
             >
               Teams
             </Button>
             <Button
               variant={activeTab === "scoring" ? "primary" : "ghost"}
-              icon={<ClipboardList size={18} />}
+              icon={<Save size={18} />}
               onClick={() => {
                 setActiveTab("scoring");
                 if (!activeScoringSubTab && roundsList.length > 0) {
                   setActiveScoringSubTab("round_" + roundsList.sort((a, b) => a.orderIndex - b.orderIndex)[0]?.id);
                 }
               }}
-              className="justify-start py-3"
+              className="justify-start py-3 w-full"
             >
               Scoring
             </Button>
@@ -905,7 +1053,226 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
 
         {/* Core panel content flow */}
         <main className="flex-1 overflow-y-auto p-8">
-          {/* TAB 1: ROUNDS & QUESTIONS EDITOR */}
+          {/* TAB 0: OVERVIEW DASHBOARD */}
+          {activeTab === "overview" && (() => {
+            // Calculate dynamic real-time action plan states
+            const hasQuestions = questionsList.some((q) => q.prompt && q.prompt.trim() !== "");
+            const roundsCount = roundsList.length;
+            const teamsCount = teamsList.length;
+            const hasScores = scoresList.some((s) => s.score !== null);
+
+            const step1Status = roundsCount > 0 && hasQuestions
+              ? { label: "Completed", color: "text-accent-success bg-accent-success/10 border-accent-success/20" }
+              : { label: "Action Required", color: "text-accent-warning bg-accent-warning/10 border-accent-warning/20 animate-pulse" };
+
+            const step2Status = roundsCount > 0 && hasQuestions
+              ? { label: "Ready to Print", color: "text-accent-info bg-accent-info/10 border-accent-info/20" }
+              : { label: "Awaiting Quiz Build", color: "text-text-subtle bg-white/5 border-white/10" };
+
+            const step3Status = teamsCount > 0
+              ? { label: `${teamsCount} Teams Registered`, color: "text-accent-success bg-accent-success/10 border-accent-success/20" }
+              : { label: "No Teams Added", color: "text-accent-danger bg-accent-danger/10 border-accent-danger/20" };
+
+            const step4Status = hasScores
+              ? { label: "Scoring Active", color: "text-accent-success bg-accent-success/10 border-accent-success/20" }
+              : teamsCount > 0
+                ? { label: "Ready to Host", color: "text-accent-info bg-accent-info/10 border-accent-info/20" }
+                : { label: "Not Started", color: "text-text-subtle bg-white/5 border-white/10" };
+
+            return (
+              <Stack gap="large" className="max-w-5xl mx-auto">
+                {/* Premium Welcome Header */}
+                <div className="p-8 bg-gradient-to-br from-accent-primary/20 via-surface-overlay/10 to-transparent border border-accent-primary/15 rounded-3xl relative overflow-hidden shadow-2xl">
+                  <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-10 shrink-0 pointer-events-none hidden md:block">
+                    <Layers size={140} className="text-accent-primary" />
+                  </div>
+                  <Stack gap="small" className="max-w-2xl">
+                    <span className="text-accent-primary text-caption font-extrabold uppercase tracking-widest block font-sans">
+                      Trivia Host Dashboard
+                    </span>
+                    <Heading level={1} className="text-4xl font-display font-extrabold text-text-primary leading-tight">
+                      Welcome to your Event Console!
+                    </Heading>
+                    <Body className="text-text-secondary text-body-sm mt-1 leading-relaxed">
+                      Here is an overview of your Trivia Night event: <strong>{trivia.title}</strong>. Follow the checklist below to prepare, print materials, manage competing teams, and project live slides on the night.
+                    </Body>
+                  </Stack>
+                </div>
+
+                {/* Grid of Key Info & Quick Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Event Details Card */}
+                  <Surface variant="raised" className="p-6 flex flex-col gap-3">
+                    <Heading level={3} className="text-accent-primary font-display font-bold">
+                      📅 Event Details
+                    </Heading>
+                    <div className="flex flex-col gap-2.5 text-body-sm">
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Venue Location</span>
+                        <span className="text-text-primary font-medium">{trivia.venue || "Not configured"}</span>
+                      </div>
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Event Date</span>
+                        <span className="text-text-primary font-medium">{trivia.date || "Not configured"}</span>
+                      </div>
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Quiz Subtitle</span>
+                        <span className="text-text-primary font-medium truncate block">{trivia.subtitle || "No subtitle"}</span>
+                      </div>
+                    </div>
+                    <Button variant="secondary" onClick={() => setActiveTab("branding")} className="mt-auto text-body-xs font-semibold py-2 w-full">
+                      Edit Details
+                    </Button>
+                  </Surface>
+
+                  {/* Score Stats Card */}
+                  <Surface variant="raised" className="p-6 flex flex-col gap-3">
+                    <Heading level={3} className="text-accent-info font-display font-bold">
+                      📊 Quiz Stats
+                    </Heading>
+                    <div className="flex flex-col gap-2.5 text-body-sm">
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Configured Rounds</span>
+                        <span className="text-text-primary font-medium">{roundsCount} rounds</span>
+                      </div>
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Total Max Score</span>
+                        <span className="text-text-primary font-medium">{totalTriviaPoints} points possible</span>
+                      </div>
+                      <div>
+                        <span className="text-text-subtle block text-xs uppercase font-bold">Registered Teams</span>
+                        <span className="text-text-primary font-medium">{teamsCount} teams registered</span>
+                      </div>
+                    </div>
+                    <Button variant="secondary" onClick={() => setActiveTab("rounds")} className="mt-auto text-body-xs font-semibold py-2 w-full">
+                      Manage Quiz Builder
+                    </Button>
+                  </Surface>
+
+                  {/* Presentation Launch Panel */}
+                  <Surface variant="raised" className="p-6 flex flex-col gap-3 border border-accent-primary/20 bg-accent-primary/[0.02]">
+                    <Heading level={3} className="text-accent-success font-display font-bold">
+                      🎛️ Projection Screen
+                    </Heading>
+                    <Body className="text-body-xs leading-relaxed text-text-secondary">
+                      Launch the projection slide deck to display slides to the audience on a projector or TV. Use the built-in controller for slide navigation.
+                    </Body>
+                    <div className="flex flex-col gap-2 mt-auto w-full">
+                      <Button variant="primary" onClick={() => onLaunchPresenter(presentToken)} icon={<Play size={14} />} className="text-body-xs font-bold py-2.5 w-full">
+                        Launch Slides Screen
+                      </Button>
+                      <Button variant="secondary" onClick={() => onLaunchPresenter(presentToken, true)} icon={<Settings size={14} />} className="text-body-xs font-bold py-2.5 w-full">
+                        Launch Host Controller
+                      </Button>
+                    </div>
+                  </Surface>
+                </div>
+
+                {/* Checklist & Roadmap */}
+                <div className="flex flex-col gap-4">
+                  <Heading level={3} className="text-text-secondary font-display font-semibold">
+                    Trivia Night Action Plan
+                  </Heading>
+
+                  <div className="flex flex-col gap-3.5">
+                    {/* Step 1 */}
+                    <div className="flex items-start gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="w-10 h-10 rounded-xl bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-lg font-mono shrink-0">
+                        1
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <Heading level={3} className="text-text-primary text-base font-bold">
+                            Create your Rounds & Questions
+                          </Heading>
+                          <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-lg border ${step1Status.color}`}>
+                            {step1Status.label}
+                          </span>
+                        </div>
+                        <Body className="text-body-xs text-text-secondary mt-1">
+                          Use the **Quiz Builder** to set up question lists, round titles, layouts, or configure special challenge rounds.
+                        </Body>
+                      </div>
+                      <Button variant="secondary" size="small" onClick={() => setActiveTab("rounds")} className="shrink-0">
+                        Build Quiz
+                      </Button>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex items-start gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="w-10 h-10 rounded-xl bg-accent-info/10 text-accent-info flex items-center justify-center font-bold text-lg font-mono shrink-0">
+                        2
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <Heading level={3} className="text-text-primary text-base font-bold">
+                            Print Answer Sheets & Marking Guides
+                          </Heading>
+                          <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-lg border ${step2Status.color}`}>
+                            {step2Status.label}
+                          </span>
+                        </div>
+                        <Body className="text-body-xs text-text-secondary mt-1">
+                          Go to the **Print Centre** to download PDF packages for physical team answer sheets and markers.
+                        </Body>
+                      </div>
+                      <Button variant="secondary" size="small" onClick={() => setActiveTab("print")} className="shrink-0">
+                        Go to Print
+                      </Button>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex items-start gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="w-10 h-10 rounded-xl bg-accent-warning/10 text-accent-warning flex items-center justify-center font-bold text-lg font-mono shrink-0">
+                        3
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <Heading level={3} className="text-text-primary text-base font-bold">
+                            Register Competing Teams
+                          </Heading>
+                          <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-lg border ${step3Status.color}`}>
+                            {step3Status.label}
+                          </span>
+                        </div>
+                        <Body className="text-body-xs text-text-secondary mt-1">
+                          Open the **Teams** tab to add competing teams as they arrive at their tables on the night.
+                        </Body>
+                      </div>
+                      <Button variant="secondary" size="small" onClick={() => setActiveTab("teams")} className="shrink-0">
+                        Add Teams
+                      </Button>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex items-start gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="w-10 h-10 rounded-xl bg-accent-success/10 text-accent-success flex items-center justify-center font-bold text-lg font-mono shrink-0">
+                        4
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <Heading level={3} className="text-text-primary text-base font-bold">
+                            Score and Host on the Night
+                          </Heading>
+                          <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-lg border ${step4Status.color}`}>
+                            {step4Status.label}
+                          </span>
+                        </div>
+                        <Body className="text-body-xs text-text-secondary mt-1">
+                          Launch your projection presentation. As rounds end, open the **Scoring** tab to enter scores and bonus points. Live leaderboards compute automatically!
+                        </Body>
+                      </div>
+                      <Button variant="secondary" size="small" onClick={() => setActiveTab("scoring")} className="shrink-0">
+                        Enter Scores
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Stack>
+            );
+          })()}
+
+          {/* TAB 1: QUIZ BUILDER */}
           {activeTab === "rounds" && (
             <Stack gap="large">
               {/* Layout Switch Confirmation Banner */}
@@ -944,8 +1311,42 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                 </div>
               )}
 
+              {/* Quiz Overview Title Card */}
+              <Surface variant="raised" className="p-6 bg-gradient-to-r from-accent-primary/10 via-transparent to-transparent border border-accent-primary/20 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <span className="text-body-xs font-bold uppercase tracking-widest text-accent-primary font-display">
+                    Active Quiz
+                  </span>
+                  <Heading level={2} className="text-text-primary text-3xl font-display font-extrabold mt-1">
+                    {trivia.title}
+                  </Heading>
+                  {trivia.subtitle && (
+                    <Body className="text-text-secondary text-body-sm mt-0.5">
+                      {trivia.subtitle}
+                    </Body>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-6 shrink-0 bg-white/5 border border-white/10 px-6 py-3 rounded-2xl">
+                  <div className="text-center">
+                    <span className="block text-[10px] text-text-subtle uppercase tracking-wider font-bold">Rounds</span>
+                    <span className="block text-2xl font-extrabold font-mono text-accent-info">{roundsList.length}</span>
+                  </div>
+                  <div className="border-r border-white/10 h-8"></div>
+                  <div className="text-center">
+                    <span className="block text-[10px] text-text-subtle uppercase tracking-wider font-bold">Total Max Score</span>
+                    <span className="block text-2xl font-extrabold font-mono text-accent-primary">{totalTriviaPoints} pts</span>
+                  </div>
+                  <div className="border-r border-white/10 h-8"></div>
+                  <div className="text-center">
+                    <span className="block text-[10px] text-text-subtle uppercase tracking-wider font-bold">Registered Teams</span>
+                    <span className="block text-2xl font-extrabold font-mono text-accent-success">{teamsList.length}</span>
+                  </div>
+                </div>
+              </Surface>
+
               {/* Rounds selection tab header */}
-              <div className="flex border-b border-border-default/40 gap-4">
+              <div className="flex border-b border-border-default/40 gap-4 items-center flex-wrap">
                 {roundsList
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map((round) => (
@@ -964,6 +1365,13 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                       {round.title}
                     </button>
                   ))}
+                <button
+                  onClick={handleCreateRound}
+                  className="px-3.5 py-2 bg-accent-primary/10 border border-accent-primary/20 hover:bg-accent-primary hover:text-text-on-accent text-accent-primary rounded-xl font-semibold text-body-xs transition-all cursor-pointer flex items-center gap-1.5 ml-2 shadow-sm"
+                  title="Create a new trivia round"
+                >
+                  <Plus size={14} /> Add Round
+                </button>
               </div>
 
               {selectedRound && (
@@ -972,26 +1380,38 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                   <div className="lg:col-span-7 flex flex-col gap-6">
                     {/* Rename and layout parameters card */}
                     <Surface variant="raised" className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-raised/40">
-                      <div>
-                        <input
-                          type="text"
-                          value={selectedRound.title}
-                          onChange={(e) => handleRenameRound(selectedRound.id, e.target.value)}
-                          className="bg-transparent border-b border-transparent hover:border-border-strong focus:border-accent-primary text-h2 font-display font-bold text-text-primary px-1 outline-none mb-1 transition-all"
-                        />
-                        <div className="flex gap-2 items-center mt-1">
-                          <span className={`text-caption uppercase px-2 py-0.5 rounded text-body-xs font-bold ${
+                      <div className="flex flex-col gap-2 w-full md:w-auto">
+                        <span className="text-text-subtle text-caption text-body-xs font-bold uppercase">
+                          Round Settings
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1 bg-surface-sunken border border-border-default rounded-xl px-2 py-1">
+                            <input
+                              type="text"
+                              value={selectedRound.title}
+                              onChange={(e) => handleRenameRound(selectedRound.id, e.target.value)}
+                              className="bg-transparent border-0 text-body font-sans font-bold text-text-primary px-1 outline-none w-48 transition-all"
+                              title="Click to rename round"
+                            />
+                            <span className="text-[10px] text-text-subtle uppercase font-bold shrink-0 font-sans px-1" title="Editable title">
+                              ✏️
+                            </span>
+                          </div>
+                          
+                          <span className={`text-caption uppercase px-2 py-1 rounded text-body-xs font-bold ${
                             selectedRound.type === "special_round" 
                               ? "bg-accent-warning/10 text-accent-warning" 
                               : "bg-accent-primary/10 text-accent-primary"
                           }`}>
                             {selectedRound.type === "special_round" ? "Special Round" : "Question Round"}
                           </span>
-                          <Subtle>Max points: {calculateRoundMaxScore(selectedRoundQuestions)}</Subtle>
+                          <Subtle className="font-semibold text-body-xs">
+                            Max points: {calculateRoundMaxScore(selectedRoundQuestions, selectedRound.specialRoundConfig?.maxPoints)}
+                          </Subtle>
                         </div>
                       </div>
 
-                      <Stack direction="row" gap="small" align="center">
+                      <Stack direction="row" gap="small" align="center" className="flex-wrap shrink-0">
                         <Select
                           value={selectedRound.type}
                           onChange={async (e) => {
@@ -1029,25 +1449,73 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                             <option value="landscape_20">20 landscape slots</option>
                           </Select>
                         )}
+
+                        <Button
+                          variant="danger"
+                          size="small"
+                          onClick={() => handleDeleteRound(selectedRound.id)}
+                          icon={<Trash size={14} />}
+                          className="py-2 shrink-0 shadow-none border border-accent-danger/25"
+                          disabled={roundsList.length <= 1}
+                          title={roundsList.length <= 1 ? "Cannot delete the only remaining round." : "Delete this round"}
+                        >
+                          Delete Round
+                        </Button>
                       </Stack>
                     </Surface>
 
                     {/* Question Slots layout grid display */}
                     <div className="flex flex-col gap-3">
-                      <div className="flex justify-between items-center px-1">
-                        <Heading level={3} className="text-text-secondary">
-                          Question Grid
-                        </Heading>
-                        <Subtle>Click a slot to write/edit its question.</Subtle>
-                      </div>
-
                       {selectedRound.type === "special_round" ? (
-                        <Surface className="p-8 text-center text-text-subtle">
-                          <Body>Special rounds do not have distinct question sheets or answer cards in the MVP.</Body>
-                          <Body className="text-body-sm mt-1">Configure maximum point results directly inside the Scoring panel!</Body>
+                        <Surface variant="raised" className="p-6 bg-surface-raised/40 flex flex-col gap-4 border border-accent-warning/20">
+                          <Heading level={3} className="text-accent-warning font-display font-semibold">
+                            Special Round Settings
+                          </Heading>
+                          <Body className="text-body-sm leading-relaxed">
+                            Special rounds do not have individual question sheets. Configure instructions and scoring limits below, which will automatically show on the slide screen.
+                          </Body>
+
+                          <div className="flex flex-col gap-4 mt-2">
+                            <Input
+                              label="Maximum Possible Points Limit"
+                              type="number"
+                              min="1"
+                              value={specialMaxPointsInput}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                setSpecialMaxPointsInput(val);
+                              }}
+                              placeholder="e.g. 10"
+                              required
+                            />
+                            <Textarea
+                              label="Special Round Presentation Instructions"
+                              rows={4}
+                              value={specialInstructionsInput}
+                              onChange={(e) => setSpecialInstructionsInput(e.target.value)}
+                              placeholder="e.g. In this round, teams will compete in a paper plane flight contest. The longest flight wins 10 points..."
+                            />
+                            <Button
+                              onClick={handleSaveSpecialRoundSettings}
+                              variant="secondary"
+                              className="mt-2 w-full md:w-auto"
+                              icon={<Save size={16} />}
+                              disabled={saving}
+                            >
+                              {saving ? "Saving settings..." : "Save Special Settings"}
+                            </Button>
+                          </div>
                         </Surface>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <>
+                          <div className="flex justify-between items-center px-1">
+                            <Heading level={3} className="text-text-secondary">
+                              Question Grid
+                            </Heading>
+                            <Subtle>Click a slot to write/edit its question.</Subtle>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {activeSlots.map((slot) => {
                             const hasQ = !!slot.question;
                             const isSelected = selectedSlotNumber === slot.slotNumber;
@@ -1100,6 +1568,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                             );
                           })}
                         </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1392,7 +1861,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({
                               Active Layout: <span className="text-text-primary capitalize">{selectedRound.answerSheetLayout || "N/A"}</span>
                             </span>
                             <span className="text-body-sm font-semibold text-accent-info">
-                              Calculated Max Score: {calculateRoundMaxScore(selectedRoundQuestions)} points
+                              Calculated Max Score: {calculateRoundMaxScore(selectedRoundQuestions, selectedRound?.specialRoundConfig?.maxPoints)} points
                             </span>
                           </div>
 

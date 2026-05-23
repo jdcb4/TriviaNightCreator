@@ -42,11 +42,11 @@ export default function App() {
     setPage({ name: "builder", triviaNightId, editToken });
   };
 
-  const navigateToPresent = (triviaNightId: string, presentToken: string, editToken?: string) => {
+  const navigateToPresent = (triviaNightId: string, presentToken: string, editToken?: string, hostControl?: boolean) => {
     window.history.pushState(
       {},
       "",
-      `/?id=${triviaNightId}&presentToken=${presentToken}${editToken ? `&editToken=${editToken}` : ""}`
+      `/?id=${triviaNightId}&presentToken=${presentToken}${editToken ? `&editToken=${editToken}` : ""}${hostControl ? "&hostControl=true" : ""}`
     );
     setPage({ name: "present", triviaNightId, presentToken, editToken });
   };
@@ -77,8 +77,8 @@ export default function App() {
             triviaNightId={page.triviaNightId}
             editToken={page.editToken}
             onExit={navigateToCreate}
-            onLaunchPresenter={(presentToken) =>
-              navigateToPresent(page.triviaNightId, presentToken, page.editToken)
+            onLaunchPresenter={(presentToken, hostControl) =>
+              navigateToPresent(page.triviaNightId, presentToken, page.editToken, hostControl)
             }
           />
         );

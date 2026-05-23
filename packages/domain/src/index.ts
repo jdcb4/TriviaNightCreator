@@ -13,7 +13,10 @@ import type {
  * Calculates the maximum possible score for a list of questions in a round.
  * Only questions that are filled (non-empty) are counted.
  */
-export function calculateRoundMaxScore(questions: Question[]): number {
+export function calculateRoundMaxScore(questions: Question[], specialMaxPoints?: number): number {
+  if (specialMaxPoints !== undefined && specialMaxPoints > 0) {
+    return specialMaxPoints;
+  }
   return questions.reduce((sum, question) => {
     if (question.type === "multipoint" && question.answerConfig.type === "multipoint") {
       // Each correct answer in a multipoint question is worth pointsPerAnswer (MVP is fixed at 1 per answer)
@@ -230,6 +233,8 @@ export function derivePresentationRoundState(
     type: round.type,
     questions: presentationQuestions,
     isRevealed,
+    description: round.description ?? undefined,
+    specialRoundConfig: round.specialRoundConfig ?? undefined,
   };
 
   if (isRevealed) {

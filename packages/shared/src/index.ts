@@ -198,5 +198,7 @@ export const PresentationRoundStateSchema = z.object({
   questions: z.array(PresentationQuestionSchema),
   answers: z.record(z.string(), z.any()).optional(), // revealed answers by questionId
   isRevealed: z.boolean().default(false),
+  description: z.string().optional(),
+  specialRoundConfig: SpecialRoundConfigSchema.optional(),
 });
 export type PresentationRoundState = z.infer<typeof PresentationRoundStateSchema>;

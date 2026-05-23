@@ -6,32 +6,42 @@ import {
   questions,
   teams,
 } from "./schema.js";
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
+import { eq } from "drizzle-orm";
 
-function generateToken(prefix: "edit" | "present"): string {
-  return `${prefix}_${randomBytes(24).toString("hex")}`;
-}
+const FIXED_TRIVIA_ID = "d3b07384-d113-4ec5-a5e6-ec49a0d82e8d";
+const FIXED_EDIT_TOKEN = "edit_demo_super_secret_token_123456";
+const FIXED_PRESENT_TOKEN = "present_demo_super_secret_token_123456";
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
 async function createDemoQuiz() {
-  console.log("Creating high-quality demo quiz...");
-  const triviaNightId = crypto.randomUUID();
+  console.log("Checking for deterministic demo quiz...");
   const now = new Date();
 
-  // Create raw tokens
-  const rawEditToken = generateToken("edit");
-  const rawPresentToken = generateToken("present");
-
   try {
+    // Check if the trivia night already exists to make seeding conditional
+    const [existingQuiz] = await db
+      .select()
+      .from(triviaNights)
+      .where(eq(triviaNights.id, FIXED_TRIVIA_ID))
+      .limit(1);
+
+    if (existingQuiz) {
+      console.log(`Demo quiz with ID ${FIXED_TRIVIA_ID} already exists in the database. Skipping seeding to preserve host test edits.`);
+      return;
+    }
+
+    console.log("Demo quiz not found. Proceeding with seeding...");
+
     // 1. Insert Trivia Night
     await db.insert(triviaNights).values({
-      id: triviaNightId,
+      id: FIXED_TRIVIA_ID,
       title: "Ultimate Trivia Showdown",
       subtitle: "A Premium Demo Quiz with General Knowledge, Science, & Pop Culture",
-      date: "2026-05-21",
+      date: "2026-05-23",
       venue: "The Great Hall",
       status: "ready", // Mark it as ready for hosting!
       branding: {
@@ -51,15 +61,15 @@ async function createDemoQuiz() {
     await db.insert(accessTokens).values([
       {
         id: crypto.randomUUID(),
-        triviaNightId,
-        tokenHash: hashToken(rawEditToken),
+        triviaNightId: FIXED_TRIVIA_ID,
+        tokenHash: hashToken(FIXED_EDIT_TOKEN),
         accessType: "edit",
         createdAt: now,
       },
       {
         id: crypto.randomUUID(),
-        triviaNightId,
-        tokenHash: hashToken(rawPresentToken),
+        triviaNightId: FIXED_TRIVIA_ID,
+        tokenHash: hashToken(FIXED_PRESENT_TOKEN),
         accessType: "present",
         createdAt: now,
       },
@@ -75,13 +85,13 @@ async function createDemoQuiz() {
     for (const [i, name] of teamNames.entries()) {
       await db.insert(teams).values({
         id: crypto.randomUUID(),
-        triviaNightId,
+        triviaNightId: FIXED_TRIVIA_ID,
         name: name,
         orderIndex: i + 1,
       });
     }
 
-    // 4. Insert 3 Rounds (Landscape 20 layout)
+    // 4. Insert 3 Rounds (2 x Landscape 20 and 1 x Portrait 10 for testing coverage!)
     const round1Id = crypto.randomUUID();
     const round2Id = crypto.randomUUID();
     const round3Id = crypto.randomUUID();
@@ -89,7 +99,7 @@ async function createDemoQuiz() {
     await db.insert(rounds).values([
       {
         id: round1Id,
-        triviaNightId,
+        triviaNightId: FIXED_TRIVIA_ID,
         title: "Round 1: General Knowledge",
         orderIndex: 1,
         type: "question_round",
@@ -98,7 +108,7 @@ async function createDemoQuiz() {
       },
       {
         id: round2Id,
-        triviaNightId,
+        triviaNightId: FIXED_TRIVIA_ID,
         title: "Round 2: Science & Nature",
         orderIndex: 2,
         type: "question_round",
@@ -107,11 +117,11 @@ async function createDemoQuiz() {
       },
       {
         id: round3Id,
-        triviaNightId,
+        triviaNightId: FIXED_TRIVIA_ID,
         title: "Round 3: Pop Culture & Entertainment",
         orderIndex: 3,
         type: "question_round",
-        answerSheetLayout: "landscape_20",
+        answerSheetLayout: "portrait_10", // 10-question Portrait layout!
         answersRevealed: false,
       },
     ]);
@@ -298,6 +308,7 @@ async function createDemoQuiz() {
       { orderIndex: 20, type: "standard", prompt: "What is the dense central core of an atom, containing protons and neutrons, called?", points: 1, answerConfig: { type: "standard", answer: "Nucleus", acceptableAnswers: ["nucleus"] } }
     ];
 
+    // Truncated to exactly 10 questions for Round 3 (Portrait 10) to give perfect testing coverage
     const round3Questions = [
       { orderIndex: 1, type: "standard", prompt: "Which iconic pop singer is widely known as the 'Queen of Pop'?", points: 1, answerConfig: { type: "standard", answer: "Madonna", acceptableAnswers: ["madonna"] } },
       {
@@ -339,46 +350,6 @@ async function createDemoQuiz() {
       },
       { orderIndex: 9, type: "standard", prompt: "What is the name of the fictional Scandinavian-inspired kingdom in Disney's Frozen?", points: 1, answerConfig: { type: "standard", answer: "Arendelle", acceptableAnswers: ["arendelle"] } },
       { orderIndex: 10, type: "standard", prompt: "Which actor played Tony Stark/Iron Man in the Marvel Cinematic Universe starting in 2008?", points: 1, answerConfig: { type: "standard", answer: "Robert Downey Jr.", acceptableAnswers: ["robert downey jr", "robert downey jr.", "robert downey"] } },
-      { orderIndex: 11, type: "standard", prompt: "Which popular Netflix sci-fi drama show features characters named Eleven, Mike, Dustin, and Will?", points: 1, answerConfig: { type: "standard", answer: "Stranger Things", acceptableAnswers: ["stranger things"] } },
-      { orderIndex: 12, type: "standard", prompt: "Which famous English playwright wrote the classic tragedy Romeo and Juliet?", points: 1, answerConfig: { type: "standard", answer: "William Shakespeare", acceptableAnswers: ["william shakespeare", "shakespeare"] } },
-      {
-        orderIndex: 13,
-        type: "multiple_choice",
-        prompt: "Which legendary British rock band performed the operatic masterpiece song 'Bohemian Rhapsody'?",
-        points: 1,
-        answerConfig: {
-          type: "multiple_choice",
-          options: [
-            { id: "a", label: "A", text: "Led Zeppelin" },
-            { id: "b", label: "B", text: "The Who" },
-            { id: "c", label: "C", text: "Queen" },
-            { id: "d", label: "D", text: "Pink Floyd" }
-          ],
-          correctOptionId: "c"
-        }
-      },
-      { orderIndex: 14, type: "standard", prompt: "What is the highest-grossing film of all time worldwide, unadjusted for inflation?", points: 1, answerConfig: { type: "standard", answer: "Avatar", acceptableAnswers: ["avatar"] } },
-      { orderIndex: 15, type: "multipoint", prompt: "Name the two main Hollywood voice actors who play Woody and Buzz Lightyear in the Toy Story series.", points: 2, answerConfig: { type: "multipoint", answers: ["Tom Hanks", "Tim Allen"], pointsPerAnswer: 1 } },
-      { orderIndex: 16, type: "standard", prompt: "How many seasons of the highly popular sitcom Friends were produced and broadcast?", points: 1, answerConfig: { type: "standard", answer: "10", acceptableAnswers: ["10", "ten"] } },
-      { orderIndex: 17, type: "standard", prompt: "Who is the green-clad heroic main protagonist in Nintendo's The Legend of Zelda video game franchise?", points: 1, answerConfig: { type: "standard", answer: "Link", acceptableAnswers: ["link"] } },
-      { orderIndex: 18, type: "standard", prompt: "Which popular social media application is known for its viral, short-form mobile videos?", points: 1, answerConfig: { type: "standard", answer: "TikTok", acceptableAnswers: ["tiktok"] } },
-      {
-        orderIndex: 19,
-        type: "multiple_choice",
-        prompt: "What is the name of the premier superhero team in the Marvel Universe that includes Thor, Captain America, Iron Man, and Hulk?",
-        points: 1,
-        answerConfig: {
-          type: "multiple_choice",
-          options: [
-            { id: "a", label: "A", text: "Justice League" },
-            { id: "b", label: "B", text: "The Avengers" },
-            { id: "c", label: "C", text: "X-Men" },
-            { id: "d", label: "D", text: "Guardians of the Galaxy" }
-          ],
-          correctOptionId: "b"
-        }
-      },
-      { orderIndex: 20, type: "standard", prompt: "In the Star Wars space opera franchise, what is the name of Han Solo's loyal Wookiee co-pilot?", points: 1, answerConfig: { type: "standard", answer: "Chewbacca", acceptableAnswers: ["chewbacca", "chewie"] } }
     ];
 
     // Helper to insert questions
@@ -408,14 +379,14 @@ async function createDemoQuiz() {
     await insertQuestions(round3Id, round3Questions);
 
     console.log("-----------------------------------------");
-    console.log("Demo quiz created successfully!");
-    console.log("Trivia Night ID:", triviaNightId);
-    console.log("Edit Token (Raw):", rawEditToken);
-    console.log("Presentation Token (Raw):", rawPresentToken);
+    console.log("Demo quiz created/refreshed successfully!");
+    console.log("Trivia Night ID:", FIXED_TRIVIA_ID);
+    console.log("Edit Token (Raw):", FIXED_EDIT_TOKEN);
+    console.log("Presentation Token (Raw):", FIXED_PRESENT_TOKEN);
     console.log("-----------------------------------------");
     console.log("Access URLs (assuming local dev server runs on port 3000):");
-    console.log(`Edit link: http://localhost:3000/?id=${triviaNightId}&editToken=${rawEditToken}`);
-    console.log(`Present link: http://localhost:3000/?id=${triviaNightId}&presentToken=${rawPresentToken}`);
+    console.log(`Edit link: http://localhost:3000/?id=${FIXED_TRIVIA_ID}&editToken=${FIXED_EDIT_TOKEN}`);
+    console.log(`Present link: http://localhost:3000/?id=${FIXED_TRIVIA_ID}&presentToken=${FIXED_PRESENT_TOKEN}`);
     console.log("-----------------------------------------");
   } catch (error) {
     console.error("Failed to create demo quiz:", error);

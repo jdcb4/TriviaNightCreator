@@ -30,12 +30,10 @@ interface PresentationPageProps {
 type SlideType =
   | { type: "title" }
   | { type: "round_intro"; roundIndex: number }
-  | { type: "question"; roundIndex: number; questionIndex: number }
   | { type: "question_recap"; roundIndex: number }
-  | { type: "answer_walkthrough"; roundIndex: number; questionIndex: number }
+  | { type: "answers_intro"; roundIndex: number }
   | { type: "answer_recap"; roundIndex: number }
   | { type: "round_leaderboard"; roundIndex: number }
-  | { type: "overall_leaderboard"; upToRoundIndex: number }
   | { type: "tiebreakers" }
   | { type: "results" };
 
@@ -65,9 +63,12 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
 
   // Slide presentation options & recap modal states
   const [includeQuestionRecaps, setIncludeQuestionRecaps] = useState(true);
-  const [includeAnswerRecaps, setIncludeAnswerRecaps] = useState(true);
+  const [includeAnswerRecaps, setIncludeAnswerRecaps] = useState(false);
   const [showSettingsPopover, setShowSettingsPopover] = useState(false);
   const [recapModal, setRecapModal] = useState<{ type: "questions" | "answers"; roundIndex: number } | null>(null);
+  const [showNavigationGrid, setShowNavigationGrid] = useState(() => {
+    return new URLSearchParams(window.location.search).get("hostControl") === "true";
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -185,41 +186,29 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
       // 2. Round Intro
       deck.push({ type: "round_intro", roundIndex: roundIdx });
 
-      // 3. Question-by-Question (only if not a special round)
+      // 3. Question Recap
       if (round.type !== "special_round" && round.questions && round.questions.length > 0) {
-        round.questions.forEach((_: any, qIdx: number) => {
-          deck.push({ type: "question", roundIndex: roundIdx, questionIndex: qIdx });
-        });
+        deck.push({ type: "question_recap", roundIndex: roundIdx });
 
-        // 4. Question Recap
-        if (includeQuestionRecaps) {
-          deck.push({ type: "question_recap", roundIndex: roundIdx });
-        }
+        // 4. Answers Intro
+        deck.push({ type: "answers_intro", roundIndex: roundIdx });
 
-        // 5. Answer Walkthrough (deliberate reveal slots)
-        round.questions.forEach((_: any, qIdx: number) => {
-          deck.push({ type: "answer_walkthrough", roundIndex: roundIdx, questionIndex: qIdx });
-        });
-
-        // 6. Answer Recap
+        // 5. Answer Recap
         if (includeAnswerRecaps) {
           deck.push({ type: "answer_recap", roundIndex: roundIdx });
         }
       }
 
-      // 7. Round Leaderboard
+      // 6. Round combined split leaderboard
       deck.push({ type: "round_leaderboard", roundIndex: roundIdx });
-
-      // 7b. Overall Leaderboard
-      deck.push({ type: "overall_leaderboard", upToRoundIndex: roundIdx });
     });
 
-    // 8. Tiebreakers
+    // 7. Tiebreakers
     if (loadedTiebreakers && loadedTiebreakers.length > 0) {
       deck.push({ type: "tiebreakers" });
     }
 
-    // 9. Final Results Standings
+    // 8. Final Results Standings
     deck.push({ type: "results" });
 
     setSlides(deck);
@@ -354,6 +343,15 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
                 📄 Teams will answer on paper answer sheets. Prepare your pens and select your team captains!
               </Subtle>
             </div>
+
+            {editToken && (
+              <button
+                onClick={() => setShowNavigationGrid(true)}
+                className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl border border-accent-primary bg-accent-primary text-text-on-accent font-bold hover:bg-accent-primary-hover transition-all cursor-pointer shadow-lg shadow-accent-primary/20 text-body-sm font-sans"
+              >
+                🎛️ Open Host Controller
+              </button>
+            )}
           </Stack>
         );
 
@@ -373,57 +371,29 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
               </span>
             )}
             <div className="border-b border-white/10 w-32 my-6"></div>
-            <Body className="text-text-secondary text-xl font-medium max-w-lg">
+            <Body className="text-text-secondary text-xl font-medium max-w-lg whitespace-pre-line">
               {round?.type === "special_round"
-                ? "This round is a special challenge. Listen closely to the host for instructions!"
+                ? (round.description || "This round is a special challenge. Listen closely to the host for instructions!")
                 : `This round contains ${round?.questions?.length || 0} questions. Write your answers on the Round ${activeSlide.roundIndex + 1} Answer Sheet.`}
             </Body>
           </Stack>
         );
       }
 
-      case "question": {
+      case "answers_intro": {
         const round = rounds[activeSlide.roundIndex];
-        const question = round?.questions?.[activeSlide.questionIndex];
         return (
-          <Stack align="stretch" gap="large" className="w-full max-w-5xl px-12 select-none">
-            <div className="flex justify-between items-center border-b border-white/10 pb-6 mb-6">
-              <div>
-                <span className="text-accent-primary text-h4 font-display font-extrabold uppercase tracking-wider block">
-                  {round?.title}
-                </span>
-                <span className="text-text-secondary text-caption font-semibold mt-1">
-                  Question {question?.orderIndex} of {round?.questions?.length || 0}
-                </span>
-              </div>
-              <span className="text-text-presentation text-h4 font-mono font-bold px-3 py-1 bg-white/5 border border-white/10 rounded-xl">
-                {question?.points} {question?.points === 1 ? "pt" : "pts"}
-              </span>
-            </div>
-
-            <Heading level={1} display={false} className="text-3xl md:text-5xl font-bold font-sans text-text-presentation leading-relaxed">
-              {question?.prompt}
+          <Stack align="center" gap="large" className="text-center max-w-3xl px-8 select-none py-12">
+            <span className="text-accent-success text-h2 uppercase tracking-widest font-extrabold font-display animate-pulse">
+              Round Complete
+            </span>
+            <Heading level={1} display={true} className="text-5xl md:text-7xl text-text-presentation leading-none font-display uppercase tracking-tight text-accent-success">
+              Here Come the Answers
             </Heading>
-
-            {/* Render Multiple Choice Options */}
-            {question?.type === "multiple_choice" && question.options && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                {question.options.map((opt: any) => (
-                  <Surface
-                    key={opt.id}
-                    variant="raised"
-                    className="p-5 flex items-center gap-4 bg-white/5 border border-white/10 shadow-lg"
-                  >
-                    <span className="w-10 h-10 rounded-xl bg-accent-primary text-text-on-accent font-mono font-extrabold text-lg flex items-center justify-center shrink-0">
-                      {opt.label}
-                    </span>
-                    <span className="text-text-presentation text-lg font-semibold font-sans">
-                      {opt.text}
-                    </span>
-                  </Surface>
-                ))}
-              </div>
-            )}
+            <div className="border-b border-white/10 w-32 my-6"></div>
+            <Body className="text-text-secondary text-xl font-medium max-w-lg">
+              {round?.title} Solutions. Hand in your answer sheets now! The host will read out the correct answers.
+            </Body>
           </Stack>
         );
       }
@@ -431,151 +401,49 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
       case "question_recap": {
         const round = rounds[activeSlide.roundIndex];
         return (
-          <Stack align="stretch" gap="large" className="w-full max-w-6xl px-8 select-none py-6">
-            <div className="border-b border-white/10 pb-4 mb-4 flex justify-between items-end">
+          <Stack align="stretch" gap="small" className="w-full h-full max-w-[95vw] px-4 select-none py-2 flex-1">
+            <div className="border-b border-white/10 pb-2 mb-2 flex justify-between items-center shrink-0">
               <div>
-                <span className="text-accent-primary text-h3 font-display font-extrabold uppercase tracking-wide">
+                <span className="text-accent-primary text-body-xs font-display font-extrabold uppercase tracking-widest leading-none">
                   Round Recap
                 </span>
-                <Heading level={2} className="text-text-presentation text-2xl font-bold mt-1">
+                <Heading level={2} className="text-text-presentation text-xl font-bold font-display mt-0.5 leading-none">
                   {round?.title} — Review Questions
                 </Heading>
               </div>
-              <span className="text-caption text-text-secondary bg-white/5 px-3 py-1 rounded-lg border border-white/10 font-medium">
+              <span className="text-[10px] text-text-secondary bg-white/5 px-2.5 py-1 rounded-lg border border-white/10 font-bold uppercase tracking-wider">
                 Answer sheets due soon!
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh] pr-2">
+            <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4.5 overflow-y-auto flex-1 w-full pr-1">
               {round?.questions
                 ?.sort((a: any, b: any) => a.orderIndex - b.orderIndex)
                 .map((q: any) => (
-                  <Surface
+                  <div
                     key={q.id}
-                    variant="sunken"
-                    className="p-4 bg-white/5 border border-white/10 flex items-start gap-4"
+                    className="break-inside-avoid mb-4 p-4 sm:p-5 bg-white/5 border border-white/10 flex items-start gap-3.5 rounded-2xl transition-all shadow hover:bg-white/[0.08]"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-accent-primary font-mono shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center font-extrabold text-accent-primary font-mono shrink-0 text-base shadow-inner border border-white/5">
                       {q.orderIndex}
                     </div>
                     <div className="overflow-hidden">
-                      <Body className="text-text-presentation font-semibold text-body-sm leading-normal line-clamp-3">
+                      <Body className="text-text-presentation font-semibold text-sm sm:text-base leading-snug">
                         {q.prompt}
                       </Body>
                       {q.type === "multiple_choice" && q.options && (
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="flex flex-wrap gap-1.5 mt-2">
                           {q.options.map((o: any) => (
-                            <span key={o.id} className="text-body-xs font-semibold px-2 py-0.5 bg-white/5 rounded border border-white/10 text-text-secondary">
-                              {o.label}: {o.text}
+                            <span key={o.id} className="text-body-xs font-bold px-2 py-0.5 bg-white/5 rounded-lg border border-white/10 text-text-secondary font-sans">
+                              <span className="text-accent-primary font-mono mr-1">{o.label}</span> {o.text}
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
-                  </Surface>
+                  </div>
                 ))}
             </div>
-          </Stack>
-        );
-      }
-
-      case "answer_walkthrough": {
-        const round = rounds[activeSlide.roundIndex];
-        const question = round?.questions?.[activeSlide.questionIndex];
-        const hasAnswersPayload = !!round?.isRevealed && !!round?.answers;
-        const answerData = hasAnswersPayload ? round.answers[question?.id] : null;
-        const isSelfRevealed = revealedAnswers[question?.id] || false;
-
-        return (
-          <Stack align="stretch" gap="large" className="w-full max-w-5xl px-12 select-none">
-            <div className="flex justify-between items-center border-b border-white/10 pb-6 mb-6">
-              <div>
-                <span className="text-accent-success text-h4 font-display font-extrabold uppercase tracking-wider block">
-                  Answers Reveal Walkthrough
-                </span>
-                <span className="text-text-secondary text-caption font-semibold mt-1">
-                  Question {question?.orderIndex} of {round?.questions?.length || 0}
-                </span>
-              </div>
-              <span className="text-text-presentation text-h4 font-mono font-bold px-3 py-1 bg-white/5 border border-white/10 rounded-xl">
-                {question?.points} {question?.points === 1 ? "pt" : "pts"}
-              </span>
-            </div>
-
-            <Heading level={1} display={false} className="text-2xl md:text-4xl font-bold font-sans text-text-presentation mb-4 leading-normal">
-              {question?.prompt}
-            </Heading>
-
-            {/* Answer Display Grid */}
-            <div className="mt-6 flex flex-col items-center">
-              {isSelfRevealed ? (
-                <Surface variant="overlay" className="w-full p-8 border-accent-success/30 bg-accent-success/5 animate-fade-in shadow-2xl flex flex-col items-center justify-center min-h-48">
-                  <span className="text-accent-success uppercase tracking-widest text-caption font-bold mb-3">
-                    Correct Answer
-                  </span>
-                  
-                  {/* Multipoint answer block */}
-                  {question?.type === "multipoint" && answerData?.answers ? (
-                    <div className="flex flex-col gap-2 w-full max-w-md">
-                      {answerData.answers.map((ans: string, idx: number) => (
-                        <div key={idx} className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl font-semibold text-text-presentation text-lg text-center">
-                          {ans}
-                        </div>
-                      ))}
-                    </div>
-                  ) : question?.type === "multiple_choice" && answerData ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex items-center gap-4">
-                        <span className="w-16 h-16 rounded-2xl bg-accent-success text-text-on-accent font-mono font-extrabold text-3xl flex items-center justify-center shrink-0">
-                          {answerData.correctOptionLabel}
-                        </span>
-                        <Heading level={2} className="text-3xl text-text-presentation font-sans font-bold">
-                          {answerData.correctOptionText}
-                        </Heading>
-                      </div>
-                    </div>
-                  ) : (
-                    <Heading level={1} className="text-3xl md:text-5xl text-accent-success font-display font-extrabold text-center leading-none">
-                      {answerData?.answer || "[Answer Hidden]"}
-                    </Heading>
-                  )}
-
-                  {question?.type === "standard" && answerData?.acceptableAnswers?.length > 0 && (
-                    <div className="mt-4 text-center">
-                      <Subtle className="block mb-1 text-text-secondary font-semibold text-caption">Also Acceptable:</Subtle>
-                      <span className="text-text-secondary font-sans font-medium text-lg">
-                        {answerData.acceptableAnswers.join(", ")}
-                      </span>
-                    </div>
-                  )}
-                </Surface>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 border border-dashed border-white/20 rounded-2xl w-full min-h-48 bg-white/5 shadow-inner">
-                  <HelpCircle size={48} className="text-text-subtle mb-4 animate-pulse" />
-                  <Button
-                    onClick={() => handleToggleReveal(question?.id)}
-                    variant="primary"
-                    size="large"
-                    icon={<Eye size={18} />}
-                    className="shadow-accent-primary/20 scale-105"
-                  >
-                    Reveal Answer
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Helper to let the presenter Reveal all correct options or toggle standard state */}
-            {editToken && !round?.isRevealed && (
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => handleServerRevealRound(round.id, true)}
-                  className="px-4 py-2 border border-white/10 hover:border-accent-success rounded-xl bg-white/5 text-text-secondary hover:text-accent-success text-body-sm font-semibold transition-colors cursor-pointer"
-                >
-                  🔒 Unlock Answers Data on Screen (Requires Host Key)
-                </button>
-              </div>
-            )}
           </Stack>
         );
       }
@@ -584,50 +452,49 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
         const round = rounds[activeSlide.roundIndex];
         const hasAnswersPayload = !!round?.isRevealed && !!round?.answers;
         return (
-          <Stack align="stretch" gap="large" className="w-full max-w-6xl px-8 select-none py-6">
-            <div className="border-b border-white/10 pb-4 mb-4 flex justify-between items-end">
+          <Stack align="stretch" gap="small" className="w-full h-full max-w-[95vw] px-4 select-none py-2 flex-1">
+            <div className="border-b border-white/10 pb-2 mb-2 flex justify-between items-center shrink-0">
               <div>
-                <span className="text-accent-success text-h3 font-display font-extrabold uppercase tracking-wide">
+                <span className="text-accent-success text-body-xs font-display font-extrabold uppercase tracking-widest leading-none">
                   Round Answers Recap
                 </span>
-                <Heading level={2} className="text-text-presentation text-2xl font-bold mt-1">
+                <Heading level={2} className="text-text-presentation text-xl font-bold font-display mt-0.5 leading-none">
                   {round?.title} — Solutions Grid
                 </Heading>
               </div>
-              <span className="text-caption text-accent-success bg-accent-success/15 px-3 py-1 rounded-lg border border-accent-success/20 font-bold">
-                Review complete round scoring details
+              <span className="text-[10px] text-accent-success bg-accent-success/15 px-2.5 py-1 rounded-lg border border-accent-success/20 font-bold uppercase tracking-wider">
+                Scoring Details Review
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh] pr-2">
+            <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4.5 overflow-y-auto flex-1 w-full pr-1">
               {round?.questions
                 ?.sort((a: any, b: any) => a.orderIndex - b.orderIndex)
                 .map((q: any) => {
                   const ansData = hasAnswersPayload ? round.answers[q.id] : null;
                   return (
-                    <Surface
+                    <div
                       key={q.id}
-                      variant="raised"
-                      className="p-4 bg-white/5 border border-white/10 flex items-start gap-4"
+                      className="break-inside-avoid mb-4 p-4 sm:p-5 bg-white/5 border border-white/10 flex items-start gap-3.5 rounded-2xl transition-all shadow hover:bg-white/[0.08]"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-accent-success font-mono shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center font-extrabold text-accent-success font-mono shrink-0 text-base shadow-inner border border-white/5">
                         {q.orderIndex}
                       </div>
                       <div className="overflow-hidden w-full">
-                        <Body className="text-text-secondary font-semibold text-body-xs line-clamp-2 leading-tight">
+                        <Body className="text-text-secondary font-medium text-xs sm:text-sm leading-snug">
                           {q.prompt}
                         </Body>
-                        <div className="mt-2 text-accent-success font-semibold text-body-sm font-sans truncate">
+                        <div className="mt-2 text-accent-success font-bold text-sm sm:text-base font-sans whitespace-pre-wrap">
                           {q.type === "multipoint" && ansData?.answers ? (
                             ansData.answers.join(" • ")
                           ) : q.type === "multiple_choice" && ansData ? (
                             `${ansData.correctOptionLabel} — ${ansData.correctOptionText}`
                           ) : (
-                            ansData?.answer || "[Click walkthrough to reveal]"
+                            ansData?.answer || "Unrevealed"
                           )}
                         </div>
                       </div>
-                    </Surface>
+                    </div>
                   );
                 })}
             </div>
@@ -637,10 +504,10 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
 
       case "round_leaderboard": {
         const round = rounds[activeSlide.roundIndex];
-        // Calculate leaderboard standings from teams
-        const overallRanked = computedLeaderboard;
-        // Let's sort teams by this round's results specifically to show the round leaderboard!
-        const roundScoresSorted = [...overallRanked]
+        
+        // 1. Calculate Recent Round Leaderboard
+        const overallRankedAtEnd = computedLeaderboard;
+        const roundScoresSorted = [...overallRankedAtEnd]
           .map((row) => {
             const roundRes = row.roundResults.find((r) => r.roundId === round.id);
             const score = roundRes ? roundRes.totalRoundScore : null;
@@ -656,7 +523,6 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
             return a.teamName.localeCompare(b.teamName);
           });
 
-        // Assign ranks
         let currentRank = 1;
         let prevScore: number | null = null;
         const rankedRoundRows = roundScoresSorted.map((row, idx) => {
@@ -671,76 +537,23 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
           };
         });
 
-        return (
-          <Stack align="stretch" gap="large" className="w-full max-w-4xl px-8 select-none py-6">
-            <div className="text-center mb-6">
-              <span className="text-accent-primary text-h3 uppercase tracking-widest font-extrabold font-display">
-                Leaderboard Standings
-              </span>
-              <Heading level={1} className="text-4xl md:text-5xl text-text-presentation font-bold font-display mt-1">
-                {round?.title} Results
-              </Heading>
-            </div>
-
-            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-2">
-              {rankedRoundRows.map((row) => (
-                <div
-                  key={row.teamId}
-                  className="flex justify-between items-center p-4 bg-white/5 border border-white/10 rounded-2xl shadow-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="w-10 text-center font-bold font-mono text-accent-info text-xl">
-                      {row.roundRank}.
-                    </span>
-                    <span className="text-text-presentation text-xl font-bold font-sans">
-                      {row.teamName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {row.roundScore === null ? (
-                      <span className="text-caption text-body-xs font-bold text-accent-warning bg-accent-warning/15 px-2 py-0.5 rounded border border-accent-warning/20">
-                        Unmarked
-                      </span>
-                    ) : (
-                      <span className="text-text-presentation text-xl font-extrabold font-mono text-accent-primary">
-                        {row.roundScore} pts
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {teams.length === 0 && (
-                <div className="text-center text-text-subtle py-8">
-                  No team scores are configured yet.
-                </div>
-              )}
-            </div>
-          </Stack>
-        );
-      }
-
-      case "overall_leaderboard": {
+        // 2. Calculate Cumulative Overall Leaderboard up to this round index
         const sortedRounds = [...rounds].sort((a, b) => a.orderIndex - b.orderIndex);
-        const upToRoundIdx = activeSlide.upToRoundIndex;
+        const upToRoundIdx = activeSlide.roundIndex;
 
-        // Filter rounds up to this round index
         const roundsFiltered = sortedRounds.slice(0, upToRoundIdx + 1);
         const roundIdsFiltered = new Set(roundsFiltered.map((r) => r.id));
 
-        // Filter scores for only the active rounds
         const scoresFiltered = scoresList.filter((s) => roundIdsFiltered.has(s.roundId));
-
-        // Filter bonus scores: round-level bonuses must belong to the active rounds.
-        // Night-level bonuses (no roundId) are only included if this is the final round.
         const bonusScoresFiltered = bonusScoresList.filter((b) => {
           if (b.roundId) {
             return roundIdsFiltered.has(b.roundId);
           }
-          // Night bonus
+          // Night bonus is only included on the very last round's leaderboard
           return upToRoundIdx === sortedRounds.length - 1;
         });
 
-        const overallRanked = calculateLeaderboards(
+        const overallRankedFiltered = calculateLeaderboards(
           teams,
           roundsFiltered,
           scoresFiltered,
@@ -748,50 +561,111 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
         );
 
         return (
-          <Stack align="stretch" gap="large" className="w-full max-w-4xl px-8 select-none py-6">
+          <Stack align="stretch" gap="large" className="w-full max-w-6xl px-8 select-none py-4">
             <div className="text-center mb-6">
               <span className="text-accent-primary text-h3 uppercase tracking-widest font-extrabold font-display">
-                Trivia Night Standings
+                Round Complete Standings
               </span>
               <Heading level={1} className="text-4xl md:text-5xl text-text-presentation font-bold font-display mt-1">
-                Overall Leaderboard
+                {round?.title} Leaderboards
               </Heading>
-              <div className="text-text-secondary text-caption font-semibold mt-2">
-                Cumulative standings up to {roundsFiltered[roundsFiltered.length - 1]?.title || `Round ${upToRoundIdx + 1}`}
-              </div>
             </div>
 
-            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-2">
-              {overallRanked.map((row) => (
-                <div
-                  key={row.teamId}
-                  className="flex justify-between items-center p-4 bg-white/5 border border-white/10 rounded-2xl shadow-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="w-10 text-center font-bold font-mono text-accent-info text-xl">
-                      {row.rank}.
-                    </span>
-                    <span className="text-text-presentation text-xl font-bold font-sans">
-                      {row.teamName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 font-semibold text-lg">
-                    {row.hasUnmarkedRounds && (
-                      <span className="text-caption text-body-xs font-bold text-accent-warning bg-accent-warning/15 px-2 py-0.5 rounded border border-accent-warning/20">
-                        Incomplete
+            {/* Split Screen Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left Column: Recent Round Leaderboard */}
+              <div className="flex flex-col gap-3">
+                <div className="border-b border-white/10 pb-2 mb-2 flex justify-between items-center">
+                  <span className="text-h4 font-bold text-accent-info font-display uppercase tracking-wider">
+                    Recent Round Standings
+                  </span>
+                  <span className="text-body-xs font-semibold px-2 py-0.5 bg-accent-info/10 text-accent-info border border-accent-info/20 rounded">
+                    This Round
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                  {rankedRoundRows.slice(0, 10).map((row) => (
+                    <div
+                      key={row.teamId}
+                      className="flex justify-between items-center p-3.5 bg-white/5 border border-white/10 rounded-xl shadow-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 text-center font-bold font-mono text-accent-info text-lg">
+                          {row.roundRank}.
+                        </span>
+                        <span className="text-text-presentation text-lg font-bold font-sans">
+                          {row.teamName}
+                        </span>
+                      </div>
+                      <span className="text-text-presentation text-lg font-extrabold font-mono text-accent-primary">
+                        {row.roundScore === null ? "Unmarked" : `${row.roundScore} pts`}
                       </span>
-                    )}
-                    <span className="text-text-presentation text-xl font-extrabold font-mono text-accent-primary">
-                      {row.totalScore} pts
+                    </div>
+                  ))}
+                  {teams.length === 0 && (
+                    <div className="text-center text-text-subtle py-8 text-body-sm">
+                      No scores entered yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Cumulative Overall Leaderboard */}
+              <div className="flex flex-col gap-3">
+                <div className="border-b border-white/10 pb-2 mb-2 flex justify-between items-center">
+                  <span className="text-h4 font-bold text-accent-primary font-display uppercase tracking-wider">
+                    Overall Cumulative Standings
+                  </span>
+                  {upToRoundIdx > 0 && (
+                    <span className="text-body-xs font-semibold px-2 py-0.5 bg-accent-primary/10 text-accent-primary border border-accent-primary/20 rounded">
+                      Rounds 1–{upToRoundIdx + 1}
                     </span>
+                  )}
+                </div>
+
+                {upToRoundIdx === 0 ? (
+                  /* Round 1 Special Rule: Right column is blank/subtle placeholder */
+                  <div className="flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl p-8 bg-white/[0.01] min-h-[300px] text-center">
+                    <Trophy size={40} className="text-text-subtle/30 mb-3 animate-pulse" />
+                    <Subtle className="text-text-secondary text-body-sm max-w-xs font-medium">
+                      Cumulative standings are identical to Round 1 results. Cumulative leaderboard will unlock starting from Round 2.
+                    </Subtle>
                   </div>
-                </div>
-              ))}
-              {teams.length === 0 && (
-                <div className="text-center text-text-subtle py-8">
-                  No team scores are configured yet.
-                </div>
-              )}
+                ) : (
+                  <div className="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                    {overallRankedFiltered.slice(0, 10).map((row) => (
+                      <div
+                        key={row.teamId}
+                        className="flex justify-between items-center p-3.5 bg-white/5 border border-white/10 rounded-xl shadow-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 text-center font-bold font-mono text-accent-info text-lg">
+                            {row.rank}.
+                          </span>
+                          <span className="text-text-presentation text-lg font-bold font-sans">
+                            {row.teamName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {row.hasUnmarkedRounds && (
+                            <span className="text-[10px] font-bold text-accent-warning bg-accent-warning/15 px-1.5 py-0.5 rounded border border-accent-warning/20 leading-none">
+                              Incomplete
+                            </span>
+                          )}
+                          <span className="text-text-presentation text-lg font-extrabold font-mono text-accent-primary">
+                            {row.totalScore} pts
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {teams.length === 0 && (
+                      <div className="text-center text-text-subtle py-8 text-body-sm">
+                        No team scores found.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </Stack>
         );
@@ -940,8 +814,8 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
       )}
 
       {/* CORE ACTIVE SLIDE VIEW */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="transition-all duration-300 w-full flex justify-center">
+      <div className="flex-1 flex flex-col items-stretch justify-center p-8 overflow-hidden">
+        <div className="transition-all duration-300 w-full h-full flex flex-col items-center justify-center flex-1">
           {renderSlideContent()}
         </div>
       </div>
@@ -978,28 +852,15 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
 
             <div className="border-r border-white/20 h-6"></div>
 
-            {/* Quick Recap Action Buttons (Active for regular rounds) */}
-            {activeSlide &&
-              ("roundIndex" in activeSlide) &&
-              rounds[activeSlide.roundIndex]?.type !== "special_round" && (
-                <>
-                  <button
-                    onClick={() => setRecapModal({ type: "questions", roundIndex: activeSlide.roundIndex })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/30 text-body-xs font-bold text-text-presentation transition-all cursor-pointer shadow-md select-none"
-                    title="Quick recap of all questions in this round"
-                  >
-                    📋 Recap Questions
-                  </button>
-                  <button
-                    onClick={() => setRecapModal({ type: "answers", roundIndex: activeSlide.roundIndex })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/30 text-body-xs font-bold text-text-presentation transition-all cursor-pointer shadow-md select-none"
-                    title="Quick recap of all answers in this round"
-                  >
-                    🔑 Recap Answers
-                  </button>
-                  <div className="border-r border-white/20 h-6"></div>
-                </>
-              )}
+            {/* Host Navigator jump grid trigger */}
+            <button
+              onClick={() => setShowNavigationGrid(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-accent-primary bg-accent-primary/5 hover:bg-accent-primary/15 text-body-xs font-bold text-accent-primary transition-all cursor-pointer shadow-md select-none"
+              title="Open the Host Slide Jump Control Desk"
+            >
+              🎛️ Host Controller
+            </button>
+            <div className="border-r border-white/20 h-6"></div>
 
             {/* Presentation Options Dropup */}
             <div className="relative">
@@ -1196,6 +1057,225 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* HOST NAVIGATION JUMP GRID MODAL */}
+      {showNavigationGrid && (() => {
+        // Helper to find a slide index by type and roundIndex
+        const findSlideIndex = (type: string, roundIndex?: number) => {
+          return slides.findIndex((s) => {
+            if (s.type !== type) return false;
+            if (roundIndex !== undefined && "roundIndex" in s && s.roundIndex !== roundIndex) return false;
+            return true;
+          });
+        };
+
+        return (
+          <div className="absolute inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-fade-in">
+            <div className="w-full max-w-4xl bg-black/90 border border-white/10 rounded-3xl p-8 flex flex-col shadow-2xl max-h-[85vh] relative overflow-hidden">
+              {/* Close Button */}
+              <button
+                onClick={() => setShowNavigationGrid(false)}
+                className="absolute top-6 right-6 p-2 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-presentation cursor-pointer transition-all shadow-md"
+                title="Close Navigation Grid"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="border-b border-white/10 pb-4 mb-6">
+                <span className="text-accent-primary text-caption font-extrabold uppercase tracking-widest block font-sans">
+                  Host Control Desk
+                </span>
+                <Heading level={1} className="text-3xl font-extrabold text-text-presentation font-display mt-1">
+                  Slide Navigation Control
+                </Heading>
+                <Subtle className="text-text-secondary text-body-sm mt-1 block">
+                  Click any cell below to instantly jump the presentation projector screen directly to that phase of play.
+                </Subtle>
+              </div>
+
+              {/* Table Grid container */}
+              <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
+                {/* Title & Global Slides Quick Actions */}
+                <div className="flex flex-wrap gap-3 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                  <button
+                    onClick={() => {
+                      const idx = findSlideIndex("title");
+                      if (idx !== -1) {
+                        setCurrentSlideIndex(idx);
+                        setShowNavigationGrid(false);
+                      }
+                    }}
+                    className="px-4 py-2 border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary text-text-presentation font-bold rounded-xl transition-all cursor-pointer shadow-md text-body-sm"
+                  >
+                    🎬 Title Slide
+                  </button>
+
+                  {tiebreakers.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const idx = findSlideIndex("tiebreakers");
+                        if (idx !== -1) {
+                          setCurrentSlideIndex(idx);
+                          setShowNavigationGrid(false);
+                        }
+                      }}
+                      className="px-4 py-2 border border-white/15 bg-white/5 hover:bg-accent-warning hover:border-accent-warning text-text-presentation font-bold rounded-xl transition-all cursor-pointer shadow-md text-body-sm"
+                    >
+                      ⚖️ Tiebreakers
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      const idx = findSlideIndex("results");
+                      if (idx !== -1) {
+                        setCurrentSlideIndex(idx);
+                        setShowNavigationGrid(false);
+                      }
+                    }}
+                    className="px-4 py-2 border border-white/15 bg-white/5 hover:bg-accent-success hover:border-accent-success text-text-presentation font-bold rounded-xl transition-all cursor-pointer shadow-md text-body-sm"
+                  >
+                    🏆 Final Champion / Winner
+                  </button>
+                </div>
+
+                {/* Rounds Table Grid */}
+                <div className="border border-white/10 rounded-2xl overflow-hidden shadow-lg bg-white/[0.01]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/5 text-text-secondary text-body-xs font-bold uppercase tracking-wider">
+                        <th className="p-4 font-display">Round Details</th>
+                        <th className="p-4 text-center font-display">1. Landing</th>
+                        <th className="p-4 text-center font-display">2. Questions</th>
+                        <th className="p-4 text-center font-display">3. Answers Intro</th>
+                        <th className="p-4 text-center font-display">4. Answers Recap</th>
+                        <th className="p-4 text-center font-display">5. Leaderboard</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10 text-body-sm font-semibold">
+                      {rounds
+                        .sort((a, b) => a.orderIndex - b.orderIndex)
+                        .map((round, roundIdx) => {
+                          const landingIdx = findSlideIndex("round_intro", roundIdx);
+                          const questionsIdx = findSlideIndex("question_recap", roundIdx);
+                          const answersIntroIdx = findSlideIndex("answers_intro", roundIdx);
+                          const answersRecapIdx = findSlideIndex("answer_recap", roundIdx);
+                          const leaderboardIdx = findSlideIndex("round_leaderboard", roundIdx);
+
+                          return (
+                            <tr key={round.id} className="hover:bg-white/[0.02] transition-colors">
+                              {/* Round info column */}
+                              <td className="p-4">
+                                <span className="text-text-presentation font-bold block">{round.title}</span>
+                                <span className="text-text-subtle text-caption font-medium block mt-0.5">
+                                  {round.type === "special_round" ? "Special Round" : `${round.questions?.length || 0} Questions`}
+                                </span>
+                              </td>
+
+                              {/* 1. Landing cell */}
+                              <td className="p-2 text-center">
+                                {landingIdx !== -1 ? (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentSlideIndex(landingIdx);
+                                      setShowNavigationGrid(false);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary hover:text-text-on-accent text-body-xs font-bold text-text-presentation cursor-pointer transition-all shadow select-none"
+                                  >
+                                    Landing
+                                  </button>
+                                ) : (
+                                  <span className="text-text-subtle/30 text-caption font-semibold select-none">—</span>
+                                )}
+                              </td>
+
+                              {/* 2. Questions cell */}
+                              <td className="p-2 text-center">
+                                {questionsIdx !== -1 ? (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentSlideIndex(questionsIdx);
+                                      setShowNavigationGrid(false);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary hover:text-text-on-accent text-body-xs font-bold text-text-presentation cursor-pointer transition-all shadow select-none"
+                                  >
+                                    Recap
+                                  </button>
+                                ) : (
+                                  <span className="text-text-subtle/30 text-caption font-semibold select-none">—</span>
+                                )}
+                              </td>
+
+                              {/* 3. Answers Intro cell */}
+                              <td className="p-2 text-center">
+                                {answersIntroIdx !== -1 ? (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentSlideIndex(answersIntroIdx);
+                                      setShowNavigationGrid(false);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary hover:text-text-on-accent text-body-xs font-bold text-text-presentation cursor-pointer transition-all shadow select-none"
+                                  >
+                                    Intro
+                                  </button>
+                                ) : (
+                                  <span className="text-text-subtle/30 text-caption font-semibold select-none">—</span>
+                                )}
+                              </td>
+
+                              {/* 4. Answers Recap cell */}
+                              <td className="p-2 text-center">
+                                {answersRecapIdx !== -1 ? (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentSlideIndex(answersRecapIdx);
+                                      setShowNavigationGrid(false);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary hover:text-text-on-accent text-body-xs font-bold text-text-presentation cursor-pointer transition-all shadow select-none"
+                                  >
+                                    Recap
+                                  </button>
+                                ) : (
+                                  <span className="text-text-subtle/30 text-caption font-medium select-none italic text-white/20" title="Excluded from slideshow">
+                                    Excluded
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 5. Leaderboard cell */}
+                              <td className="p-2 text-center">
+                                {leaderboardIdx !== -1 ? (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentSlideIndex(leaderboardIdx);
+                                      setShowNavigationGrid(false);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-accent-primary hover:border-accent-primary hover:text-text-on-accent text-body-xs font-bold text-text-presentation cursor-pointer transition-all shadow select-none font-sans"
+                                  >
+                                    Leaderboard
+                                  </button>
+                                ) : (
+                                  <span className="text-text-subtle/30 text-caption font-semibold select-none">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-white/10 pt-4 mt-6 flex justify-end">
+                <Button onClick={() => setShowNavigationGrid(false)} variant="secondary">
+                  Close Control Desk
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

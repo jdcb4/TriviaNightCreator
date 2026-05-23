@@ -211,10 +211,12 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
     
     /* Pre-sized Graphics Slots */
     .deco-slot-header {
-      width: 70px;
-      height: 70px;
-      border: 2px dashed #000;
-      border-radius: 4px;
+      width: 60px;
+      height: 60px;
+      border: 1px solid #000;
+      outline: 2px dashed #000;
+      outline-offset: -3px;
+      border-radius: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -228,8 +230,8 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
     .deco-slot-header .stamp-label {
       font-size: 8px;
       font-weight: 800;
-      color: #bbb;
-      letter-spacing: 1px;
+      color: #999;
+      letter-spacing: 0.5px;
     }
     
     .side-panel {
@@ -239,21 +241,22 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       height: 100%;
       background: #fafafa;
       box-sizing: border-box;
     }
     .deco-slot-side {
-      width: 85px;
-      height: 85px;
-      border: 1.5px dashed #ccc;
+      width: 90px;
+      height: 135px;
+      border: 1.5px dashed #000;
       border-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       background: #fff;
+      margin: 4px 0;
     }
     .deco-slot-side.empty {
       background: #f0f0f0;
@@ -261,7 +264,7 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
     .deco-slot-side .mascot-label {
       font-size: 8px;
       font-weight: 800;
-      color: #ccc;
+      color: #999;
       letter-spacing: 0.5px;
     }
     .scribble-zone {
@@ -287,10 +290,10 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
     }
     
     .deco-slot-footer {
-      width: 120px;
+      width: 160px;
       height: 40px;
-      border: 1.5px dashed #000;
-      border-radius: 4px;
+      border: 1px dashed #000;
+      border-radius: 3px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -299,14 +302,14 @@ function getAnswerSheetStyles(isLandscape: boolean): string {
     }
     
     .cartoon-img {
-      max-width: 90%;
-      max-height: 90%;
+      max-width: 95%;
+      max-height: 95%;
       object-fit: contain;
       filter: grayscale(100%);
     }
     .cartoon-img-footer {
-      max-width: 95%;
-      max-height: 90%;
+      max-width: 98%;
+      max-height: 95%;
       object-fit: contain;
       filter: grayscale(100%);
     }

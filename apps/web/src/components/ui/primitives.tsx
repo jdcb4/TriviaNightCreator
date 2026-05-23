@@ -194,7 +194,7 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    "inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-surface-base active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 cursor-pointer";
+    "inline-flex items-center font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-surface-base active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 cursor-pointer";
 
   const variantClasses = {
     primary:
@@ -213,9 +213,12 @@ export const Button: React.FC<ButtonProps> = ({
     large: "px-7 py-3 text-h4 gap-2.5",
   };
 
+  const hasJustify = className.includes("justify-");
+  const justifyClass = hasJustify ? "" : "justify-center";
+
   return (
     <button
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${baseClasses} ${justifyClass} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       disabled={disabled}
       {...props}
     >

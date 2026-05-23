@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
 import {
   db,
@@ -337,6 +338,49 @@ app.patch("/api/rounds/:id", requireEditToken, async (c) => {
     return c.json({ success: true });
   } catch (error) {
     console.error("Update round error:", error);
+    return c.json({ error: "Internal Server Error" }, 500);
+  }
+});
+
+app.post("/api/trivia-nights/:id/rounds", requireEditToken, async (c) => {
+  const triviaNightId = c.req.param("id") as string;
+  try {
+    const body = await c.req.json();
+    const allCurrent = await db.select().from(rounds).where(eq(rounds.triviaNightId, triviaNightId));
+    const nextOrder = allCurrent.length > 0 ? Math.max(...allCurrent.map((r) => r.orderIndex)) + 1 : 1;
+
+    const roundId = crypto.randomUUID();
+    await db.insert(rounds).values({
+      id: roundId,
+      triviaNightId,
+      title: body.title || `Round ${nextOrder}`,
+      orderIndex: nextOrder,
+      type: body.type || "question_round",
+      answerSheetLayout: body.answerSheetLayout || "landscape_20",
+      answersRevealed: false,
+    } as any);
+
+    const [created] = await db.select().from(rounds).where(eq(rounds.id, roundId)).limit(1);
+    return c.json({ success: true, round: created }, 201);
+  } catch (error) {
+    console.error("Create round error:", error);
+    return c.json({ error: "Internal Server Error" }, 500);
+  }
+});
+
+app.delete("/api/rounds/:id", requireEditToken, async (c) => {
+  const roundId = c.req.param("id") as string;
+  try {
+    // Delete cascading items explicitly
+    await db.delete(roundScores).where(eq(roundScores.roundId, roundId));
+    await db.delete(bonusScores).where(eq(bonusScores.roundId, roundId));
+    await db.delete(questions).where(eq(questions.roundId, roundId));
+    await db.delete(decorationSelections).where(eq(decorationSelections.roundId, roundId));
+    await db.delete(rounds).where(eq(rounds.id, roundId));
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Delete round error:", error);
     return c.json({ error: "Internal Server Error" }, 500);
   }
 });
@@ -959,8 +1003,18 @@ app.get("/api/print/trivia-nights/:id/marking-guides", async (c) => {
   }
 });
 
+// Serve static frontend assets (fallback for non-API static files)
+app.use("/*", serveStatic({
+  root: "./dist/web",
+}));
+
+// Fallback for SPA client-side routing (serve index.html for virtual routes)
+app.get("*", serveStatic({
+  path: "./dist/web/index.html",
+}));
+
 // Start Server
-const port = 3001;
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 console.log(`Hono API Server starting on port ${port}...`);
 serve({
   fetch: app.fetch,
