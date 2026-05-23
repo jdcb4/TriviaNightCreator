@@ -9,7 +9,7 @@ WORKDIR /app
 RUN npm install -g pnpm@9.15.0
 
 # Copy workspace meta files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 
 # Copy packages and frontend web code
 COPY packages/ ./packages/
@@ -33,7 +33,7 @@ WORKDIR /app
 RUN npm install -g pnpm@9.15.0
 
 # Copy workspace meta files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 
 # Copy packages and backend API code
 COPY packages/ ./packages/

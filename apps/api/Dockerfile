@@ -8,7 +8,7 @@ WORKDIR /app
 RUN npm install -g pnpm@9.15.0
 
 # Copy workspace meta files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 
 # Copy packages and Hono api code
 COPY packages/ ./packages/

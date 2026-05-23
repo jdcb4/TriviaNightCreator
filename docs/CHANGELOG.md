@@ -2,6 +2,11 @@
 
 Notable changes by version. Newest at the top. Bumps follow `docs/VERSIONING.md`.
 
+## 1.3.1 - 2026-05-23
+
+- **Deployment Hotfix**:
+  - Added `tsconfig.json` to the Dockerfile COPY instructions in both build stages. This ensures nested TypeScript builds (such as packages/shared) can locate and extend the root `tsconfig.json` during the Docker image compilation.
+
 ## 1.3.0 - 2026-05-23
 
 - **Unified Production Docker Monolith**:
