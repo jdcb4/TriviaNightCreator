@@ -2,6 +2,12 @@
 
 Notable changes by version. Newest at the top. Bumps follow `docs/VERSIONING.md`.
 
+## 1.3.3 - 2026-05-23
+
+- **ES Modules Production Interop Fix**:
+  - Migrated the Hono API server (`apps/api`) to use native ES Modules (`type: module` in `package.json`) to match monorepo database and shared package standards.
+  - Standardized relative imports in `apps/api/src/index.ts` and `apps/api/src/middleware/auth.ts` to explicitly include `.js` file extensions, eliminating `ERR_REQUIRE_ESM` import blocks when running under native node runtime environments in production.
+
 ## 1.3.2 - 2026-05-23
 
 - **Database Connection Verification DX**:

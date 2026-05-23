@@ -32,8 +32,8 @@ import {
   renderCombinedAnswerSheetsHtml,
   renderCombinedMarkingGuidesHtml,
 } from "@trivia/pdf";
-import { generateToken, hashToken } from "./utils/crypto";
-import { requireEditToken, requirePresentOrEditToken } from "./middleware/auth";
+import { generateToken, hashToken } from "./utils/crypto.js";
+import { requireEditToken, requirePresentOrEditToken } from "./middleware/auth.js";
 import * as dotenv from "dotenv";
 
 dotenv.config();

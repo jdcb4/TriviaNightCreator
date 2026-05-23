@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import { db, accessTokens, rounds, eq, and } from "@trivia/db";
-import { hashToken } from "../utils/crypto";
+import { hashToken } from "../utils/crypto.js";
 
 /**
  * Resolves the triviaNightId from the request context.
